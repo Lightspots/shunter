@@ -1,0 +1,16 @@
+# Reference material and third-party sample mods: not ours to redistribute
+.ref/
+
+# Gradle / Kotlin
+.gradle/
+.kotlin/
+build/
+!gradle/wrapper/gradle-wrapper.jar
+
+# IDE
+.idea/
+*.iml
+out/
+
+# Credentials
+.env*
