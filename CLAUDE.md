@@ -51,11 +51,15 @@ suffix. mod.io packages have only `mod.json` plus content at the top level (no `
 
 - `.ref/` holds third-party reference material. It is git-ignored and must never be committed. 
 - Tests use generated mods and archives only (`TestFiles`), never real mods.
+- Commit messages follow "Commit messages" in README.md (`<issue> <modifier> <[area]> <subject>`, shorthand like `r`/`+` is fine).
 - Keep security properties when changing install code: checksum verification, refusing archive
   entries outside the target and symlinks, backup before replace with rollback.
 - Keep `core` free of UI dependencies; frontends go through `ModManager`.
 - HTTP uses the Ktor client (CIO engine) in `HttpDownloader`, archives Commons Compress + xz,
-  CLI Clikt 5 (`obj` is an extension: `import com.github.ajalt.clikt.core.obj`).
+  CLI Clikt 5 (the root command sets `CliContext` with `findOrSetObject`, subcommands use
+  `requireObject`).
+- `BuildInfo` is generated from the Gradle project version (`generateBuildInfo` in `core`); do not
+  add it to `src`.
 - Network calls in `core` are `suspend` and cancellable; suspend functions move blocking work to
   `Dispatchers.IO`. The CLI shares one `HttpDownloader` (closed via Clikt's `registerCloseable`)
   and runs commands in `runBlocking`. Ktor logs via SLF4J, so frontends add `slf4j-nop` at runtime
