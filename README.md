@@ -66,6 +66,37 @@ Kotlin/JVM 21+, Gradle. Modules: `core` (everything except the UI, no UI depende
 The tests use generated mods and archives only. Real mods are copyrighted by their authors and
 must not be committed; keep local samples in `.ref/` (ignored by git).
 
+### Commit messages
+
+Commit subjects follow:
+
+```
+<issue> <modifier> <[area]> <subject>
+```
+
+where **issue** and **area** are optional — for example
+`#2 ✨ [ui] Add a feature`.
+
+- **issue** – `#2`.
+- **modifier** – a gitmoji describing the kind of change. Write the emoji
+  directly, or use the one-letter shorthand below; the local `commit-msg` hook
+  rewrites the shorthand to the emoji on commit:
+
+  | shorthand | emoji | meaning                        |
+      |-----------|-------|--------------------------------|
+  | `+`       | ✨    | new feature                    |
+  | `!`       | 🚑    | bug fix                        |
+  | `-`       | 🔥    | remove code                    |
+  | `r`       | 🔨    | refactor (no behavior change)  |
+  | `c`       | 📖    | documentation only             |
+  | `t`       | 🚨    | tests                          |
+  | `v`       | ⬆️    | upgrade dependencies / versions |
+  | `b`       | 💚    | CI                             |
+  | `i`       | 🎉    | initial / project setup        |
+
+- **area** – the affected scope in brackets, e.g. `[ui]`, `[service]`,
+  `[common]`.
+
 ## License
 
 [MIT](LICENSE)
