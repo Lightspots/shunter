@@ -1,5 +1,6 @@
 package ch.lightspots.shunter.core.install
 
+import ch.lightspots.shunter.core.feed.FeedSource
 import ch.lightspots.shunter.core.stateJson
 import kotlinx.serialization.Serializable
 import java.nio.file.Path
@@ -13,8 +14,8 @@ import kotlin.io.path.writeText
 /** Where an installed mod came from, so updates can be detected later. */
 @Serializable
 data class InstallOrigin(
-    /** Feed id, e.g. `tfnet` or `modwerkstatt`. Null for a local archive. */
-    val source: String? = null,
+    /** Null for a local archive. */
+    val source: FeedSource? = null,
     /** Entry id in that feed. */
     val remoteId: String? = null,
     val fileId: String? = null,
@@ -22,7 +23,10 @@ data class InstallOrigin(
     /** Change time of the downloaded file in the feed, epoch seconds. */
     val remoteChangedAt: Long? = null,
     val version: String? = null,
-)
+) {
+    /** `tfnet:8126` style reference, like [ch.lightspots.shunter.core.feed.RemoteMod.ref]. Null for a local archive. */
+    val ref: String? get() = source?.let { "${it.id}:$remoteId" }
+}
 
 @Serializable
 data class InstallRecord(

@@ -1,8 +1,15 @@
 package ch.lightspots.shunter.core.feed
 
-/** A site that publishes a machine-readable list of mods. */
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
+
+/** A site that publishes a machine-readable list of mods. Stored in the install registry by [id]. */
+@Serializable
 enum class FeedSource(val id: String, val label: String, val url: String) {
+    @SerialName("tfnet")
     TFNET("tfnet", "transportfever.net", "https://www.transportfever.net/filebase/repos/tpf3-v3.json"),
+
+    @SerialName("modwerkstatt")
     MODWERKSTATT("modwerkstatt", "modwerkstatt.com", "https://modwerkstatt.com/tpfmm/"),
     ;
 

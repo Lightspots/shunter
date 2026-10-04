@@ -1,6 +1,5 @@
 package ch.lightspots.shunter.core
 
-import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -18,7 +17,6 @@ import kotlin.io.path.readBytes
  * JSON written by mod authors and community sites is hand-edited and not always strict,
  * so everything is parsed leniently and read through the tolerant accessors below.
  */
-@OptIn(ExperimentalSerializationApi::class)
 internal val lenientJson = Json {
     ignoreUnknownKeys = true
     isLenient = true
@@ -28,7 +26,6 @@ internal val lenientJson = Json {
 }
 
 /** Json for our own state files, pretty-printed so they stay readable when inspected by hand. */
-@OptIn(ExperimentalSerializationApi::class)
 internal val stateJson = Json {
     ignoreUnknownKeys = true
     prettyPrint = true

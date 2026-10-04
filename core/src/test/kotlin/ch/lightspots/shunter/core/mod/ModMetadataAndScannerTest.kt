@@ -45,6 +45,7 @@ class ModMetadataAndScannerTest {
         TestFiles.writeTree(tmp.resolve("broken"), mapOf("mod.json" to "{ not json"))
         tmp.resolve("empty").createDirectories()
         tmp.resolve(".hidden").createDirectories()
+        tmp.resolve("texture_cache").createDirectories()
 
         val mods = ModScanner.scan(tmp, ModLocation.LOCAL).associateBy { it.folderName }
 

@@ -1,6 +1,7 @@
 package ch.lightspots.shunter.core.install
 
 import ch.lightspots.shunter.core.TestFiles
+import ch.lightspots.shunter.core.feed.FeedSource
 import ch.lightspots.shunter.core.paths.AppDirs
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -45,7 +46,7 @@ class ModInstallerTest {
     @Test
     fun `installs a mod and records where it came from`() {
         val zip = archive("a.zip", TestFiles.inFolder("my_mod", TestFiles.modFiles("my_mod", revision = 3)))
-        val origin = InstallOrigin(source = "tfnet", remoteId = "8126", fileId = "16920")
+        val origin = InstallOrigin(source = FeedSource.TFNET, remoteId = "8126", fileId = "16920")
 
         val result = installer().install(zip, modsDir, origin, archiveSha256 = "abc")
 
@@ -56,15 +57,15 @@ class ModInstallerTest {
         assertEquals("revision 3", modsDir.resolve("my_mod/content/readme.txt").readText())
         val record = assertNotNull(registry.get(modsDir, "my_mod"))
         assertEquals(origin, record.origin)
+        assertTrue(appDirs.registryFile.readText().contains("\"source\": \"tfnet\""), "feed stored by its id")
         assertEquals("abc", record.archiveSha256)
         assertEquals(clock.instant().epochSecond, record.installedAt)
         assertTrue(appDirs.work.listDirectoryEntries().isEmpty(), "work folder is cleaned up")
     }
 
     @Test
-    fun `update backs up the old version and keeps settings lua`() {
+    fun `update backs up the old version`() {
         installer().install(archive("v1.zip", TestFiles.inFolder("my_mod", TestFiles.modFiles("my_mod", 1))), modsDir)
-        modsDir.resolve("my_mod/settings.lua").writeText("user = true")
         modsDir.resolve("my_mod/content/old_only.txt").writeText("gone after update")
 
         clock.advanceSeconds(60)
@@ -74,7 +75,6 @@ class ModInstallerTest {
         assertEquals("revision 1", backup.resolve("content/readme.txt").readText())
         assertEquals("revision 2", modsDir.resolve("my_mod/content/readme.txt").readText())
         assertFalse(modsDir.resolve("my_mod/content/old_only.txt").exists(), "update replaces, it does not merge")
-        assertEquals("user = true", modsDir.resolve("my_mod/settings.lua").readText())
         assertEquals(2, registry.get(modsDir, "my_mod")?.revision)
     }
 

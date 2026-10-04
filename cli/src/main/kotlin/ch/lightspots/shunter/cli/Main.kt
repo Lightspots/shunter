@@ -8,7 +8,6 @@ import ch.lightspots.shunter.core.paths.GamePathDetector
 import com.github.ajalt.clikt.core.CliktCommand
 import com.github.ajalt.clikt.core.Context
 import com.github.ajalt.clikt.core.main
-import com.github.ajalt.clikt.core.obj
 import com.github.ajalt.clikt.core.registerCloseable
 import com.github.ajalt.clikt.core.subcommands
 import com.github.ajalt.clikt.parameters.options.option
@@ -44,16 +43,19 @@ class Shunter : CliktCommand(name = "shunter") {
     }
 
     override fun run() {
-        val detector = GamePathDetector()
-        val detected = detector.detect(steamAccount)
-        val paths = modsDir?.let { detected.copy(localMods = it.toAbsolutePath()) } ?: detected
-        val http = currentContext.registerCloseable(HttpDownloader())
-        currentContext.obj = CliContext(
-            detector = detector,
-            manager = ModManager(paths, AppDirs.fromEnvironment(), http),
-            http = http,
-            language = language ?: Locale.getDefault().language,
-        )
+        // Subcommands get it via requireObject; one set beforehand (e.g. by a test) is kept
+        currentContext.findOrSetObject {
+            val detector = GamePathDetector()
+            val detected = detector.detect(steamAccount)
+            val paths = modsDir?.let { detected.copy(localMods = it.toAbsolutePath()) } ?: detected
+            val http = currentContext.registerCloseable(HttpDownloader())
+            CliContext(
+                detector = detector,
+                manager = ModManager(paths, AppDirs.fromEnvironment(), http),
+                http = http,
+                language = language ?: Locale.getDefault().language,
+            )
+        }
     }
 }
 

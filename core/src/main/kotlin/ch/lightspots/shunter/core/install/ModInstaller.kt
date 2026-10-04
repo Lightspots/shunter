@@ -13,13 +13,11 @@ import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.util.UUID
 import kotlin.io.path.ExperimentalPathApi
-import kotlin.io.path.copyTo
 import kotlin.io.path.copyToRecursively
 import kotlin.io.path.createDirectories
 import kotlin.io.path.deleteRecursively
 import kotlin.io.path.exists
 import kotlin.io.path.isDirectory
-import kotlin.io.path.isRegularFile
 import kotlin.io.path.listDirectoryEntries
 import kotlin.io.path.moveTo
 import kotlin.io.path.name
@@ -48,8 +46,6 @@ class ModInstaller(
     private val clock: Clock = Clock.systemUTC(),
     /** Backups kept per mod folder; older ones are deleted after an install. */
     private val keepBackups: Int = 2,
-    /** Files the user may have changed in a mod, carried over from the old version on update. */
-    private val preservedFiles: List<String> = listOf("settings.lua"),
 ) {
 
     fun install(
@@ -127,12 +123,6 @@ class ModInstaller(
                 moveDirectory(backup, target)
             }
             throw InstallException("Failed to install $folderName: ${e.message}", e)
-        }
-        if (backup != null) {
-            for (name in preservedFiles) {
-                val old = backup.resolve(name)
-                if (old.isRegularFile()) old.copyTo(target.resolve(name), overwrite = true)
-            }
         }
         return InstalledFolder(folderName, manifest.modId, manifest.revision, target, backup)
     }

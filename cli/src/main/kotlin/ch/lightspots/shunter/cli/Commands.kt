@@ -1,5 +1,6 @@
 package ch.lightspots.shunter.cli
 
+import ch.lightspots.shunter.core.ChangedOutside
 import ch.lightspots.shunter.core.ModManager
 import ch.lightspots.shunter.core.feed.FeedResult
 import ch.lightspots.shunter.core.feed.FeedService
@@ -66,7 +67,7 @@ abstract class ManagerCommand(name: String) : CliktCommand(name) {
 
     /** Feed references (`tfnet:8126`) of mods installed with shunter. */
     protected fun installedRefs(): Set<String> = manager.registry.records(manager.modsDir).values
-        .mapNotNull { r -> r.origin.source?.let { "$it:${r.origin.remoteId}" } }
+        .mapNotNull { it.origin.ref }
         .toSet()
 
     /** Prints problems the game would run into after installing or with the current mod set. */
@@ -87,6 +88,21 @@ abstract class ManagerCommand(name: String) : CliktCommand(name) {
         val checkedIds = checked.mapNotNull { it.modId }.toSet()
         manager.duplicateModIds(all).filterKeys { it in checkedIds }.forEach { (modId, mods) ->
             echo("Warning: mod id '$modId' exists more than once: ${mods.joinToString { "${it.location.label}/${it.folderName}" }}")
+        }
+    }
+
+    /** Mods replaced or removed by hand since shunter installed them; their updates are not checked. */
+    protected fun printChangedOutside(changed: List<ChangedOutside>) {
+        for (c in changed) {
+            val record = c.record
+            val current = c.current
+            val what = when {
+                current == null -> "folder was removed"
+                current.modId != record.modId -> "now holds mod id ${current.modId ?: "?"}"
+                else -> "revision ${current.manifest?.revision ?: "?"} instead of ${record.revision ?: "?"}"
+            }
+            val hint = record.origin.ref?.takeIf { current != null }?.let { ", reinstall with: shunter install $it" }.orEmpty()
+            echo("${record.folderName}: changed outside shunter ($what), installed version unknown$hint")
         }
     }
 
@@ -155,7 +171,7 @@ class ListCommand : ManagerCommand("list") {
                         mod.folderName,
                         mod.modId ?: "?",
                         mod.manifest?.revision?.toString() ?: "?",
-                        origin?.source?.let { "$it:${origin.remoteId}" } ?: "",
+                        origin?.ref ?: "",
                         mod.displayName(language),
                     )
                 },
@@ -263,8 +279,10 @@ class UpdatesCommand : ManagerCommand("updates") {
 
     override suspend fun execute() {
         val updates = manager.availableUpdates(loadFeeds(FeedSource.entries, refresh))
+        val changed = manager.changedOutside()
         if (updates.isEmpty()) {
-            echo("All mods installed with shunter are up to date.")
+            echo(if (changed.isEmpty()) "All mods installed with shunter are up to date." else "No updates found.")
+            printChangedOutside(changed)
             return
         }
         echo(
@@ -281,6 +299,7 @@ class UpdatesCommand : ManagerCommand("updates") {
             ),
         )
         echo("Install with: shunter update --all  (or: shunter update <folder>...)")
+        printChangedOutside(changed)
     }
 }
 
@@ -297,7 +316,9 @@ class UpdateCommand : ManagerCommand("update") {
         val updates = manager.availableUpdates(loadFeeds(FeedSource.entries, refresh))
             .filter { all || it.record.folderName in folders }
         val unknown = folders - updates.map { it.record.folderName }.toSet()
-        unknown.forEach { echo("No update for $it") }
+        val changed = manager.changedOutside().filter { it.record.folderName in unknown }
+        printChangedOutside(changed)
+        (unknown - changed.map { it.record.folderName }.toSet()).forEach { echo("No update for $it") }
         if (updates.isEmpty()) return
 
         updates.forEach { echo("${it.record.folderName}: ${it.file.fileName} (${humanSize(it.file.size)})") }

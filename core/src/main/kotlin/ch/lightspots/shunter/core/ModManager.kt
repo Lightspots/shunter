@@ -20,12 +20,23 @@ import ch.lightspots.shunter.core.paths.GamePaths
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.nio.file.Path
+import kotlin.io.path.isDirectory
 
 /** A mod we installed from a feed, with a newer file available there. */
 data class AvailableUpdate(
     val record: InstallRecord,
     val remote: RemoteMod,
     val file: RemoteFile,
+)
+
+/**
+ * A mod installed with shunter whose folder no longer matches the install record, because it was
+ * replaced or removed by hand. Which version is installed is unknown, so no update is offered.
+ */
+data class ChangedOutside(
+    val record: InstallRecord,
+    /** What is in the folder now; null when the folder is gone. */
+    val current: InstalledMod?,
 )
 
 /** A `mod.json` dependency that no installed mod satisfies. */
@@ -75,7 +86,7 @@ class ModManager(
         val archive = appDirs.ensureCreated().downloads.resolve(downloadFileName(mod, file))
         val sha256 = http.download(file.downloadUrl, archive, file.size, file.sha256, progress)
         val origin = InstallOrigin(
-            source = mod.source.id,
+            source = mod.source,
             remoteId = mod.id,
             fileId = file.id,
             fileName = file.fileName,
@@ -87,19 +98,33 @@ class ModManager(
 
     fun uninstall(folderName: String): Path = installer.uninstall(modsDir, folderName)
 
-    /** Mods installed from a feed whose entry now offers a different file. */
+    /** Mods installed from a feed whose entry now offers a different file. Skips mods in [changedOutside]. */
     fun availableUpdates(feeds: List<FeedResult>): List<AvailableUpdate> {
         val remoteByRef = feeds.flatMap { it.mods }.associateBy { it.ref }
-        return registry.records(modsDir).values.mapNotNull { record ->
+        val changed = changedOutside().map { it.record.folderName }.toSet()
+        return registry.records(modsDir).values.filter { it.folderName !in changed }.mapNotNull { record ->
             val origin = record.origin
-            val remote = remoteByRef["${origin.source}:${origin.remoteId}"] ?: return@mapNotNull null
+            val remote = remoteByRef[origin.ref] ?: return@mapNotNull null
             // modwerkstatt entries can hold several mod folders; match ours by name
             val file = remote.files.firstOrNull { it.folderName == record.folderName } ?: remote.files.singleOrNull()
                 ?: return@mapNotNull null
-            val newer = file.id != origin.fileId ||
-                (file.changedAt != null && origin.remoteChangedAt != null && file.changedAt > origin.remoteChangedAt)
+            val newer = if (file.sha256 != null && record.archiveSha256 != null) {
+                // transportfever.net has checksums: a re-upload of the same archive is no update
+                !file.sha256.equals(record.archiveSha256, ignoreCase = true)
+            } else {
+                file.id != origin.fileId ||
+                    (file.changedAt != null && origin.remoteChangedAt != null && file.changedAt > origin.remoteChangedAt)
+            }
             if (newer) AvailableUpdate(record, remote, file) else null
         }
+    }
+
+    /** Mods installed with shunter whose folder now holds a different mod id or revision, or is gone. */
+    fun changedOutside(): List<ChangedOutside> = registry.records(modsDir).values.mapNotNull { record ->
+        val folder = modsDir.resolve(record.folderName)
+        if (!folder.isDirectory()) return@mapNotNull ChangedOutside(record, null)
+        val current = ModScanner.read(folder, ModLocation.LOCAL)
+        if (current.modId == record.modId && current.manifest?.revision == record.revision) null else ChangedOutside(record, current)
     }
 
     /** Required `mod.json` dependencies of [mods] that no mod in [available] satisfies. */

@@ -9,11 +9,14 @@ import kotlin.io.path.name
 /** Reads mod folders from disk. Never writes anything. */
 object ModScanner {
 
+    /** Folders the game itself creates next to the mods; they are not mods. */
+    private val NON_MOD_FOLDERS = setOf("texture_cache")
+
     /** All mod folders directly inside [dir], sorted by folder name. A missing [dir] yields an empty list. */
     fun scan(dir: Path, location: ModLocation): List<InstalledMod> {
         if (!dir.isDirectory()) return emptyList()
         return dir.listDirectoryEntries()
-            .filter { it.isDirectory() && !it.name.startsWith(".") }
+            .filter { it.isDirectory() && !it.name.startsWith(".") && it.name !in NON_MOD_FOLDERS }
             .sortedBy { it.name.lowercase() }
             .map { read(it, location) }
     }
