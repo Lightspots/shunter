@@ -12,6 +12,9 @@ object ModScanner {
     /** Folders the game itself creates next to the mods; they are not mods. */
     private val NON_MOD_FOLDERS = setOf("texture_cache")
 
+    /** Characters the game allows in mod folder names (TF3 wiki, "Mod Definition"). */
+    private val VALID_FOLDER_NAME = Regex("[A-Za-z0-9_ ]+")
+
     /** All mod folders directly inside [dir], sorted by folder name. A missing [dir] yields an empty list. */
     fun scan(dir: Path, location: ModLocation): List<InstalledMod> {
         if (!dir.isDirectory()) return emptyList()
@@ -23,6 +26,9 @@ object ModScanner {
 
     fun read(folder: Path, location: ModLocation): InstalledMod {
         val problems = mutableListOf<String>()
+        if (!VALID_FOLDER_NAME.matches(folder.name)) {
+            problems += "Folder name has characters the game does not allow (only A-Z, a-z, 0-9, _ and space), it may not load"
+        }
 
         val manifestFile = folder.resolve(ModManifest.FILE_NAME)
         val manifest = if (manifestFile.isRegularFile()) {

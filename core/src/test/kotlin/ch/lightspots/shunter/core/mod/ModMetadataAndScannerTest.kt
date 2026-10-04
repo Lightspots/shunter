@@ -59,6 +59,19 @@ class ModMetadataAndScannerTest {
     }
 
     @Test
+    fun `folder names the game does not allow are reported`() {
+        listOf("good_Mod 2", "with-dash", "with.dot").forEach {
+            TestFiles.writeTree(tmp.resolve(it), mapOf("mod.json" to TestFiles.modJson("some_mod")))
+        }
+
+        val problems = ModScanner.scan(tmp, ModLocation.LOCAL).associate { it.folderName to it.problems }
+
+        assertEquals(emptyList(), problems.getValue("good_Mod 2"))
+        assertTrue(problems.getValue("with-dash").single().startsWith("Folder name has characters"))
+        assertTrue(problems.getValue("with.dot").single().startsWith("Folder name has characters"))
+    }
+
+    @Test
     fun `scan of a missing folder is empty`() {
         assertTrue(ModScanner.scan(tmp.resolve("missing"), ModLocation.MOD_IO).isEmpty())
     }

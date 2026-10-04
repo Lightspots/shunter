@@ -74,6 +74,9 @@ abstract class ManagerCommand(name: String) : CliktCommand(name) {
     protected fun reportProblems(focus: List<InstalledMod>? = null, remote: RemoteMod? = null) {
         val all = manager.scan()
         val checked = focus ?: all
+        checked.filter { it.problems.isNotEmpty() }.forEach { mod ->
+            echo("Problem in ${mod.location.label}/${mod.folderName}: ${mod.problems.joinToString("; ")}")
+        }
         val missing = manager.missingDependencies(checked, all)
         for (m in missing) {
             val name = m.displayName?.let { "$it (${m.dependency.modId})" } ?: m.dependency.modId
@@ -177,9 +180,6 @@ class ListCommand : ManagerCommand("list") {
                 },
             ),
         )
-        mods.filter { it.problems.isNotEmpty() }.forEach { mod ->
-            echo("Problem in ${mod.location.label}/${mod.folderName}: ${mod.problems.joinToString("; ")}")
-        }
         reportProblems(mods)
     }
 }
