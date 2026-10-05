@@ -26,8 +26,7 @@ data class InstalledMod(
 
     val modId: String? get() = manifest?.modId
 
-    fun displayName(language: String? = null): String =
-        metadata?.localized(language)?.name ?: manifest?.modId ?: folderName
+    fun displayName(language: String? = null): String = metadata?.localized(language)?.name ?: manifest?.modId ?: folderName
 
     val previewImage: Path get() = folder.resolve(ModMetadata.DIR_NAME).resolve(ModMetadata.PREVIEW_FILE_NAME)
 }

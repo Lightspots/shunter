@@ -13,7 +13,10 @@ import java.nio.file.Path
 
 /** How bad adding or removing a mod is for an existing savegame (`severityAdd` / `severityRemove`). */
 enum class Severity {
-    NONE, WARNING, CRITICAL;
+    NONE,
+    WARNING,
+    CRITICAL,
+    ;
 
     companion object {
         fun parse(value: String?): Severity? = when (value?.trim()?.lowercase()) {
@@ -26,11 +29,7 @@ enum class Severity {
 }
 
 /** Reference to another mod with an optional allowed revision range. */
-data class ModReference(
-    val modId: String,
-    val revisionMin: Int? = null,
-    val revisionMax: Int? = null,
-) {
+data class ModReference(val modId: String, val revisionMin: Int? = null, val revisionMax: Int? = null) {
     fun matches(revision: Int): Boolean =
         (revisionMin == null || revision >= revisionMin) && (revisionMax == null || revision <= revisionMax)
 }

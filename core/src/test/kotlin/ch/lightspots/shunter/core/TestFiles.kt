@@ -24,12 +24,11 @@ object TestFiles {
     """.trimIndent()
 
     /** Files of a minimal mod, relative to its folder. */
-    fun modFiles(modId: String, revision: Int = 1, name: String = modId, extra: Map<String, String> = emptyMap()) =
-        mapOf(
-            "mod.json" to modJson(modId, revision),
-            "_metadata/modinfo.json" to """{ "name": "$name", "summary": "", "description": "" }""",
-            "content/readme.txt" to "revision $revision",
-        ) + extra
+    fun modFiles(modId: String, revision: Int = 1, name: String = modId, extra: Map<String, String> = emptyMap()) = mapOf(
+        "mod.json" to modJson(modId, revision),
+        "_metadata/modinfo.json" to """{ "name": "$name", "summary": "", "description": "" }""",
+        "content/readme.txt" to "revision $revision",
+    ) + extra
 
     fun writeTree(root: Path, files: Map<String, String>) {
         for ((name, text) in files) {

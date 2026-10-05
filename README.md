@@ -61,7 +61,11 @@ Kotlin/JVM 21+, Gradle. Modules: `core` (everything except the UI, no UI depende
 
 ```sh
 ./gradlew build
+./gradlew spotlessApply   # format the code (ktlint)
 ```
+
+The code is formatted with ktlint (IntelliJ IDEA style, settings in `.editorconfig`), run through
+Spotless. `build` fails on unformatted code.
 
 The tests use generated mods and archives only. Real mods are copyrighted by their authors and
 must not be committed; keep local samples in `.ref/` (ignored by git).

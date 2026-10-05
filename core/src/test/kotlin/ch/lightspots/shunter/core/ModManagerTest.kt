@@ -53,7 +53,9 @@ class ModManagerTest {
         manager.registry.put(
             manager.modsDir,
             InstallRecord(
-                folder, folder, 1,
+                folder,
+                folder,
+                1,
                 InstallOrigin(source, remoteId, fileId, remoteChangedAt = changedAt),
                 archiveSha256 = sha256,
                 installedAt = 0,
@@ -81,7 +83,9 @@ class ModManagerTest {
                 feed(
                     FeedSource.MODWERKSTATT,
                     RemoteMod(
-                        FeedSource.MODWERKSTATT, "3", "Three",
+                        FeedSource.MODWERKSTATT,
+                        "3",
+                        "Three",
                         files = listOf(
                             RemoteFile("31", "other.zip", "u", folderName = "other_folder"),
                             RemoteFile("30", "three.zip", "u", changedAt = 200, folderName = "changed_file"),

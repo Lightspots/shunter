@@ -9,11 +9,7 @@ import ch.lightspots.shunter.core.str
 import kotlinx.serialization.json.JsonElement
 import java.nio.file.Path
 
-data class LocalizedText(
-    val name: String? = null,
-    val summary: String? = null,
-    val description: String? = null,
-)
+data class LocalizedText(val name: String? = null, val summary: String? = null, val description: String? = null)
 
 data class ModAuthor(val name: String, val role: String? = null)
 

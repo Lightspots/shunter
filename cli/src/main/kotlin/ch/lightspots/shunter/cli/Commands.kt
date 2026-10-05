@@ -60,7 +60,9 @@ abstract class ManagerCommand(name: String) : CliktCommand(name) {
         val maxAge = if (refresh) Duration.ZERO else Duration.ofHours(1)
         return sources.map { source ->
             service.load(source, maxAge).also { result ->
-                result.error?.let { echo("Warning: could not refresh ${source.label} ($it), using copy from ${result.fetchedAt}", err = true) }
+                result.error?.let {
+                    echo("Warning: could not refresh ${source.label} ($it), using copy from ${result.fetchedAt}", err = true)
+                }
             }
         }
     }
@@ -121,7 +123,9 @@ private fun parseRef(ref: String): Pair<FeedSource, String> {
     val (prefix, id) = if (':' in ref) ref.substringBefore(':') to ref.substringAfter(':') else "tfnet" to ref
     val source = when (prefix.lowercase()) {
         "mw" -> FeedSource.MODWERKSTATT
-        else -> FeedSource.byId(prefix) ?: throw CliktError("Unknown source '$prefix', use one of: ${FeedSource.entries.joinToString { it.id }}")
+
+        else -> FeedSource.byId(prefix)
+            ?: throw CliktError("Unknown source '$prefix', use one of: ${FeedSource.entries.joinToString { it.id }}")
     }
     if (id.isBlank()) throw CliktError("Missing id in '$ref'")
     return source to id
@@ -255,12 +259,14 @@ class InstallCommand : ManagerCommand("install") {
 
         echo("${remote.name}${remote.version?.let { " $it" } ?: ""}${remote.author?.let { " by $it" } ?: ""}")
         remote.pageUrl?.let { echo("  $it") }
-        remote.files.forEach { echo("  file: ${it.fileName} (${humanSize(it.size)})${if (it.sha256 != null) ", checksum verified after download" else ""}") }
+        remote.files.forEach {
+            echo("  file: ${it.fileName} (${humanSize(it.size)})${if (it.sha256 != null) ", checksum verified after download" else ""}")
+        }
         if (remote.dependencies.isNotEmpty()) {
             val installed = installedRefs()
             remote.dependencies.forEach { dep ->
                 val ref = dep.remoteId?.let { "${source.id}:$it" }
-                val state = if (ref != null && ref in installed) "installed" else "check: ${ref?.let { "shunter install $it" } ?: dep.pageUrl ?: "?"}"
+                val state = if (ref in installed) "installed" else "check: ${ref?.let { "shunter install $it" } ?: dep.pageUrl ?: "?"}"
                 echo("  ${if (dep.required) "requires" else "optional"}: ${dep.name ?: "?"} ($state)")
             }
         }
@@ -330,8 +336,7 @@ class UpdateCommand : ManagerCommand("update") {
 }
 
 class RemoveCommand : ManagerCommand("remove") {
-    override fun help(context: Context) =
-        "Remove a mod from the local mods folder. It is moved to the backups, not deleted."
+    override fun help(context: Context) = "Remove a mod from the local mods folder. It is moved to the backups, not deleted."
 
     private val folder by argument(help = "Mod folder name in local/mods")
     private val yes by option("--yes", "-y", help = "Do not ask for confirmation").flag()

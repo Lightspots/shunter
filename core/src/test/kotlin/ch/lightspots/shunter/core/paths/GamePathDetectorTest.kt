@@ -16,8 +16,7 @@ class GamePathDetectorTest {
     @TempDir
     lateinit var home: Path
 
-    private fun userLocal(account: String): Path =
-        home.resolve(".local/share/Steam/userdata/$account/3493540/local").createDirectories()
+    private fun userLocal(account: String): Path = home.resolve(".local/share/Steam/userdata/$account/3493540/local").createDirectories()
 
     @Test
     fun `detects native Steam folders and mod io`() {

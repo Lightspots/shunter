@@ -16,12 +16,7 @@ import kotlin.io.path.readText
 import kotlin.io.path.writeText
 
 /** Result of loading a feed. [error] is set when refreshing failed and an older copy was used instead. */
-data class FeedResult(
-    val source: FeedSource,
-    val mods: List<RemoteMod>,
-    val fetchedAt: Instant,
-    val error: String? = null,
-)
+data class FeedResult(val source: FeedSource, val mods: List<RemoteMod>, val fetchedAt: Instant, val error: String? = null)
 
 /** Downloads feeds and keeps the last copy in the cache, so they are not fetched on every command. */
 class FeedService(

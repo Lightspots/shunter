@@ -9,6 +9,9 @@ ktor = "3.6.0"
 slf4j = "2.0.20"
 clikt = "5.1.0"
 junit = "6.1.3"
+spotless = "8.10.3"
+# Used by spotless, not a library dependency
+ktlint = "1.8.0"
 
 [libraries]
 kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "kotlinx-serialization" }
@@ -30,3 +33,4 @@ kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
 kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 compose = { id = "org.jetbrains.compose", version.ref = "compose" }
+spotless = { id = "com.diffplug.spotless", version.ref = "spotless" }

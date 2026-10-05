@@ -8,11 +8,7 @@ import kotlin.io.path.createDirectories
  * Our own folders, following the XDG base directory spec.
  * Nothing of ours is ever written into the game's mod folders except the mods themselves.
  */
-data class AppDirs(
-    val data: Path,
-    val cache: Path,
-    val config: Path,
-) {
+data class AppDirs(val data: Path, val cache: Path, val config: Path) {
     /** Previous versions of mods replaced by an install. */
     val backups: Path get() = data.resolve("backups")
 
