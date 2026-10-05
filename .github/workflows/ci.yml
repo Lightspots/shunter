@@ -10,10 +10,11 @@ on:
 permissions:
   contents: read
 
-# Cancel superseded runs of a PR (e.g. rapid pushes). head_ref is only set for pull requests, so
-# every other run (pushes to main) gets a group of its own and runs to completion.
+# Cancel superseded runs of a PR (e.g. rapid pushes). Keyed by PR number, not branch name, so two
+# forks with the same branch name do not cancel each other. The number is only set for pull
+# requests, so every other run (pushes to main) gets a group of its own and runs to completion.
 concurrency:
-  group: ci-${{ github.head_ref || github.run_id }}
+  group: ci-${{ github.event.pull_request.number || github.run_id }}
   cancel-in-progress: true
 
 jobs:
