@@ -1,0 +1,22 @@
+# Path -> label rules for .github/workflows/label.yml (actions/labeler).
+
+"area:cli":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "cli/**"
+
+"area:core":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "core/**"
+
+"area:build":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "*.gradle.kts"
+          - "*/*.gradle.kts"
+          - "gradle/**"
+          - "gradlew"
+          - "gradlew.bat"
+          - "gradle.properties"
+          - ".github/**"
