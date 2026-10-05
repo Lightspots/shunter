@@ -5,17 +5,6 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
 }
 
-java {
-    sourceCompatibility = JavaVersion.VERSION_21
-    targetCompatibility = JavaVersion.VERSION_21
-}
-
-kotlin {
-    compilerOptions {
-        jvmTarget = JvmTarget.JVM_21
-    }
-}
-
 // BuildInfo.VERSION comes from the project version, so there is only one place to change it
 val generateBuildInfo = tasks.register("generateBuildInfo") {
     description = "Generates BuildInfo.kt with the current version"

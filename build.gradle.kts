@@ -1,4 +1,7 @@
 import com.diffplug.gradle.spotless.SpotlessExtension
+import org.jetbrains.compose.reload.gradle.withKotlinPlugin
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import org.jetbrains.kotlin.gradle.dsl.KotlinJvmProjectExtension
 
 plugins {
     alias(libs.plugins.kotlin.jvm) apply false
@@ -6,6 +9,23 @@ plugins {
     alias(libs.plugins.kotlin.compose) apply false
     alias(libs.plugins.compose) apply false
     alias(libs.plugins.spotless)
+}
+
+subprojects {
+    plugins.withType<JavaPlugin>().configureEach {
+        configure<JavaPluginExtension> {
+            targetCompatibility = JavaVersion.VERSION_25
+            sourceCompatibility = JavaVersion.VERSION_25
+        }
+    }
+
+    plugins.withId("org.jetbrains.kotlin.jvm") {
+        configure<KotlinJvmProjectExtension> {
+            compilerOptions {
+                jvmTarget = JvmTarget.JVM_25
+            }
+        }
+    }
 }
 
 // Formatting with ktlint, its settings are in .editorconfig. spotlessCheck is part of `check`, so unformatted code

@@ -1,7 +1,7 @@
 # Shunter: notes for AI agents and contributors
 
 Open-source (MIT) mod manager for **Transport Fever 3 on Linux**. TF3 runs **natively** on Linux
-(no Proton). Kotlin/JVM 21+, Gradle. Package `ch.lightspots.shunter`, command `shunter`.
+(no Proton). Kotlin/JVM 25+, Gradle. Package `ch.lightspots.shunter`, command `shunter`.
 See README.md for usage.
 
 ## Status and next steps
