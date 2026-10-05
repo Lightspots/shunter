@@ -4,6 +4,7 @@ import ch.lightspots.shunter.core.archive.ArchiveExtractor
 import ch.lightspots.shunter.core.mod.ModManifest
 import ch.lightspots.shunter.core.mod.ModScanner
 import ch.lightspots.shunter.core.paths.AppDirs
+import ch.lightspots.shunter.core.readableMessage
 import io.github.oshai.kotlinlogging.KotlinLogging
 import java.io.IOException
 import java.nio.file.AtomicMoveNotSupportedException
@@ -104,7 +105,7 @@ class ModInstaller(
         if (roots.isEmpty()) throw InstallException("No mod found in archive (no ${ModManifest.FILE_NAME})")
         val mods = roots.map { root ->
             val manifest = runCatching { ModManifest.read(root.resolve(ModManifest.FILE_NAME)) }
-                .getOrElse { throw InstallException("Broken ${ModManifest.FILE_NAME} in archive: ${it.message}", it) }
+                .getOrElse { throw InstallException("Broken ${ModManifest.FILE_NAME} in archive: ${it.readableMessage()}", it) }
             // mod.json directly at the archive top: the folder is named after the mod id
             val folderName = if (root == extracted) manifest.modId else root.name
             checkFolderName(folderName)
@@ -126,7 +127,7 @@ class ModInstaller(
                 if (target.exists()) target.deleteRecursively()
                 moveDirectory(backup, target)
             }
-            throw InstallException("Failed to install $folderName: ${e.message}", e)
+            throw InstallException("Failed to install $folderName: ${e.readableMessage()}", e)
         }
         return InstalledFolder(folderName, manifest.modId, manifest.revision, target, backup)
     }

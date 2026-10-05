@@ -50,8 +50,7 @@ abstract class ManagerCommand(name: String) : CliktCommand(name) {
             throw e
         } catch (e: Exception) {
             logger.error(e) { "$commandName failed" }
-            val details = cli.logFile?.let { "\nDetails are in $it" }.orEmpty()
-            throw CliktError("Error: ${e.message ?: e}$details", cause = e)
+            throw CliktError(errorMessage(e, cli.logFile), cause = e)
         }
     }
 

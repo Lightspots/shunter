@@ -5,6 +5,7 @@ import ch.lightspots.shunter.core.ModManager
 import ch.lightspots.shunter.core.net.HttpDownloader
 import ch.lightspots.shunter.core.paths.AppDirs
 import ch.lightspots.shunter.core.paths.GamePathDetector
+import ch.lightspots.shunter.core.readableMessage
 import com.github.ajalt.clikt.core.CliktCommand
 import com.github.ajalt.clikt.core.Context
 import com.github.ajalt.clikt.core.main
@@ -16,6 +17,7 @@ import com.github.ajalt.clikt.parameters.types.path
 import io.github.oshai.kotlinlogging.KotlinLogging
 import java.nio.file.Path
 import java.util.Locale
+import kotlin.system.exitProcess
 
 private val logger = KotlinLogging.logger {}
 
@@ -69,9 +71,8 @@ fun main(args: Array<String>) {
     val logFile = Logging.setup(AppDirs.fromEnvironment(), "cli")
     // Not the raw arguments: they may hold secrets (an API key), even ones Clikt rejects later
     logger.info {
-        "shunter ${BuildInfo.VERSION} (cli), Java ${Runtime.version()}, ${System.getProperty(
-            "os.name",
-        )} ${System.getProperty("os.version")}"
+        "shunter ${BuildInfo.VERSION} (cli), Java ${Runtime.version()}, " +
+            "${System.getProperty("os.name")} ${System.getProperty("os.version")}"
     }
     try {
         Shunter(logFile)
@@ -86,8 +87,13 @@ fun main(args: Array<String>) {
             )
             .main(args)
     } catch (e: Exception) {
-        // Clikt handles its own errors; anything else is a bug
+        // Clikt prints CliktErrors itself and ManagerCommand turns the subcommands' exceptions into one;
+        // this catches the rest, e.g. from detecting the game folders in Shunter.run
         logger.error(e) { "Unexpected error" }
-        throw e
+        System.err.println(errorMessage(e, logFile))
+        exitProcess(1)
     }
 }
+
+/** Error text for an unexpected exception, pointing to the log file for the details. */
+fun errorMessage(e: Exception, logFile: Path?): String = "Error: ${e.readableMessage()}" + logFile?.let { "\nDetails are in $it" }.orEmpty()
