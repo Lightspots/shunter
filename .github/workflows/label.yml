@@ -22,6 +22,7 @@ jobs:
     steps:
       # sync-labels also *removes* an area label once the PR stops touching that
       # area, so the labels keep describing the PR as it is rewritten.
-      - uses: actions/labeler@v7
+      # Pinned to a commit: this job holds a write token on fork PRs. Dependabot bumps the SHA.
+      - uses: actions/labeler@bf12e9b00b37c5c0ca2b87b79b2daf7891dbda13 # v7.0.0
         with:
           sync-labels: true

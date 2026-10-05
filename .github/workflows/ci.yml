@@ -21,7 +21,10 @@ jobs:
     name: Gradle tests
     runs-on: ubuntu-latest
     steps:
+      # The build needs no authenticated git, so the token is not left behind for the PR's build code.
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - name: Set up JDK 25
         uses: actions/setup-java@v6

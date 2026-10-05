@@ -18,13 +18,20 @@ updates:
       # a PR that does not compile. The `kotlin*` wildcard deliberately also
       # catches `org.jetbrains.kotlinx:*` (serialization, coroutines), whose
       # runtimes pair with the compiler plugin of the same generation.
+      # A group without update-types takes majors too, so every group lists them.
       kotlin:
         patterns:
           - "org.jetbrains.kotlin*"
           - "org.jetbrains.compose*"
+        update-types:
+          - minor
+          - patch
       ktor:
         patterns:
           - "io.ktor:*"
+        update-types:
+          - minor
+          - patch
       # Everything else that is not a major: one PR a week, gated by the same
       # `./gradlew check` a human PR gets. Majors are left ungrouped on purpose
       # — those are the ones worth reading one at a time.
