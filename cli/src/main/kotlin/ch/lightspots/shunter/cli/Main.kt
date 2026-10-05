@@ -14,6 +14,8 @@ import com.github.ajalt.clikt.core.subcommands
 import com.github.ajalt.clikt.parameters.options.option
 import com.github.ajalt.clikt.parameters.options.versionOption
 import com.github.ajalt.clikt.parameters.types.path
+import com.github.ajalt.mordant.rendering.Theme
+import com.github.ajalt.mordant.terminal.Terminal
 import io.github.oshai.kotlinlogging.KotlinLogging
 import java.nio.file.Path
 import java.util.Locale
@@ -90,10 +92,11 @@ fun main(args: Array<String>) {
         // Clikt prints CliktErrors itself and ManagerCommand turns the subcommands' exceptions into one;
         // this catches the rest, e.g. from detecting the game folders in Shunter.run
         logger.error(e) { "Unexpected error" }
-        System.err.println(errorMessage(e, logFile))
+        Terminal().println(errorMessage(e, logFile), stderr = true)
         exitProcess(1)
     }
 }
 
-/** Error text for an unexpected exception, pointing to the log file for the details. */
-fun errorMessage(e: Exception, logFile: Path?): String = "Error: ${e.readableMessage()}" + logFile?.let { "\nDetails are in $it" }.orEmpty()
+/** Error text for an unexpected exception, pointing to the log file for the details. Print it through a Mordant terminal. */
+fun errorMessage(e: Exception, logFile: Path?): String =
+    "${Theme.Default.danger("Error:")} ${e.readableMessage()}" + logFile?.let { "\n" + Theme.Default.muted("Details are in $it") }.orEmpty()

@@ -62,6 +62,10 @@ suffix. mod.io packages have only `mod.json` plus content at the top level (no `
 - HTTP uses the Ktor client (CIO engine) in `HttpDownloader`, archives Commons Compress + xz,
   CLI Clikt 5 (the root command sets `CliContext` with `findOrSetObject`, subcommands use
   `requireObject`).
+- CLI output goes through Clikt's `echo` (Mordant terminal), never `print`, so styles are dropped
+  when the output is not a terminal or `NO_COLOR` is set. Use the style helpers in `ManagerCommand`
+  (`warning`, `success`, `muted`, `highlight`, `bold`) and `table()`, which pads by visible width.
+  Downloads show a Mordant progress bar (`DownloadBar`, via `withDownloadBars`).
 - `BuildInfo` is generated from the Gradle project version (`generateBuildInfo` in `core`); do not
   add it to `src`.
 - Network calls in `core` are `suspend` and cancellable; suspend functions move blocking work to
