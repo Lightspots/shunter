@@ -25,13 +25,7 @@ import kotlin.io.path.name
 class InstallException(message: String, cause: Throwable? = null) : IOException(message, cause)
 
 /** One mod folder written by an install. [backup] holds the version it replaced, if any. */
-data class InstalledFolder(
-    val folderName: String,
-    val modId: String,
-    val revision: Int?,
-    val target: Path,
-    val backup: Path?,
-)
+data class InstalledFolder(val folderName: String, val modId: String, val revision: Int?, val target: Path, val backup: Path?)
 
 /**
  * Installs mods from archives into a mods folder (normally `local/mods`).

@@ -61,7 +61,11 @@ Kotlin/JVM 21+, Gradle. Modules: `core` (everything except the UI, no UI depende
 
 ```sh
 ./gradlew build
+./gradlew spotlessApply   # format the code (ktlint)
 ```
+
+The code is formatted with ktlint (IntelliJ IDEA style, settings in `.editorconfig`), run through
+Spotless. `build` fails on unformatted code.
 
 The tests use generated mods and archives only. Real mods are copyrighted by their authors and
 must not be committed; keep local samples in `.ref/` (ignored by git).
@@ -82,17 +86,17 @@ where **issue** and **area** are optional — for example
   directly, or use the one-letter shorthand below; the local `commit-msg` hook
   rewrites the shorthand to the emoji on commit:
 
-  | shorthand | emoji | meaning                        |
-      |-----------|-------|--------------------------------|
-  | `+`       | ✨    | new feature                    |
-  | `!`       | 🚑    | bug fix                        |
-  | `-`       | 🔥    | remove code                    |
-  | `r`       | 🔨    | refactor (no behavior change)  |
-  | `c`       | 📖    | documentation only             |
-  | `t`       | 🚨    | tests                          |
+  | shorthand | emoji | meaning                         |
+  |-----------|-------|---------------------------------|
+  | `+`       | ✨    | new feature                     |
+  | `!`       | 🚑    | bug fix                         |
+  | `-`       | 🔥    | remove code                     |
+  | `r`       | 🔨    | refactor (no behavior change)   |
+  | `c`       | 📖    | documentation only              |
+  | `t`       | 🚨    | tests                           |
   | `v`       | ⬆️    | upgrade dependencies / versions |
-  | `b`       | 💚    | CI                             |
-  | `i`       | 🎉    | initial / project setup        |
+  | `b`       | 💚    | CI / build                      |
+  | `i`       | 🎉    | initial / project setup         |
 
 - **area** – the affected scope in brackets, e.g. `[ui]`, `[service]`,
   `[common]`.

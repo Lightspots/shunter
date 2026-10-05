@@ -54,6 +54,9 @@ suffix. mod.io packages have only `mod.json` plus content at the top level (no `
 - Commit messages follow "Commit messages" in README.md (`<issue> <modifier> <[area]> <subject>`, shorthand like `r`/`+` is fine).
 - Keep security properties when changing install code: checksum verification, refusing archive
   entries outside the target and symlinks, backup before replace with rollback.
+- Formatting: ktlint via Spotless, `spotlessCheck` is part of `check`. Run `./gradlew spotlessApply`
+  before committing. ktlint settings live in `.editorconfig`; after changing them run
+  `./gradlew --stop`, the daemon keeps the ktlint settings it read first.
 - Keep `core` free of UI dependencies; frontends go through `ModManager`.
 - HTTP uses the Ktor client (CIO engine) in `HttpDownloader`, archives Commons Compress + xz,
   CLI Clikt 5 (the root command sets `CliContext` with `findOrSetObject`, subcommands use

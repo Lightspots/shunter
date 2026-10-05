@@ -16,12 +16,7 @@ import com.github.ajalt.clikt.parameters.types.path
 import java.util.Locale
 
 /** Shared state for all subcommands, created by [Shunter]. */
-class CliContext(
-    val detector: GamePathDetector,
-    val manager: ModManager,
-    val http: HttpDownloader,
-    val language: String,
-)
+class CliContext(val detector: GamePathDetector, val manager: ModManager, val http: HttpDownloader, val language: String)
 
 class Shunter : CliktCommand(name = "shunter") {
     override fun help(context: Context) = "Mod manager for Transport Fever 3 on Linux."

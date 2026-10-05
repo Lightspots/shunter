@@ -55,6 +55,9 @@ internal fun JsonElement?.int(): Int? = (this as? JsonPrimitive)?.let { it.intOr
 
 internal fun JsonElement?.long(): Long? = (this as? JsonPrimitive)?.let { it.longOrNull ?: it.contentOrNull?.trim()?.toLongOrNull() }
 
-internal fun JsonElement?.bool(): Boolean? = (this as? JsonPrimitive)?.let { it.booleanOrNull ?: it.contentOrNull?.trim()?.toBooleanStrictOrNull() }
+internal fun JsonElement?.bool(): Boolean? = (this as? JsonPrimitive)?.let {
+    it.booleanOrNull
+        ?: it.contentOrNull?.trim()?.toBooleanStrictOrNull()
+}
 
 internal operator fun JsonElement?.get(key: String): JsonElement? = this.obj()?.get(key)

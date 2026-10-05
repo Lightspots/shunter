@@ -40,9 +40,7 @@ fun interface DownloadProgress {
  * Ktor client for feeds and downloads. Calls are cancellable: cancelling a download stops it and
  * removes the partial file. Owns its [client], so [close] it when done.
  */
-class HttpDownloader(
-    private val client: HttpClient = defaultClient(),
-) : AutoCloseable {
+class HttpDownloader(private val client: HttpClient = defaultClient()) : AutoCloseable {
 
     suspend fun fetchText(url: String): String {
         val response = client.get(url)

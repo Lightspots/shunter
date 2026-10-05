@@ -23,11 +23,7 @@ import java.nio.file.Path
 import kotlin.io.path.isDirectory
 
 /** A mod we installed from a feed, with a newer file available there. */
-data class AvailableUpdate(
-    val record: InstallRecord,
-    val remote: RemoteMod,
-    val file: RemoteFile,
-)
+data class AvailableUpdate(val record: InstallRecord, val remote: RemoteMod, val file: RemoteFile)
 
 /**
  * A mod installed with shunter whose folder no longer matches the install record, because it was
@@ -78,23 +74,20 @@ class ModManager(
         return mod.files.flatMap { file -> installRemoteFile(mod, file, progress?.invoke(file)) }
     }
 
-    suspend fun installRemoteFile(
-        mod: RemoteMod,
-        file: RemoteFile,
-        progress: DownloadProgress? = null,
-    ): List<InstalledFolder> = withContext(Dispatchers.IO) {
-        val archive = appDirs.ensureCreated().downloads.resolve(downloadFileName(mod, file))
-        val sha256 = http.download(file.downloadUrl, archive, file.size, file.sha256, progress)
-        val origin = InstallOrigin(
-            source = mod.source,
-            remoteId = mod.id,
-            fileId = file.id,
-            fileName = file.fileName,
-            remoteChangedAt = file.changedAt,
-            version = mod.version,
-        )
-        installer.install(archive, modsDir, origin, sha256)
-    }
+    suspend fun installRemoteFile(mod: RemoteMod, file: RemoteFile, progress: DownloadProgress? = null): List<InstalledFolder> =
+        withContext(Dispatchers.IO) {
+            val archive = appDirs.ensureCreated().downloads.resolve(downloadFileName(mod, file))
+            val sha256 = http.download(file.downloadUrl, archive, file.size, file.sha256, progress)
+            val origin = InstallOrigin(
+                source = mod.source,
+                remoteId = mod.id,
+                fileId = file.id,
+                fileName = file.fileName,
+                remoteChangedAt = file.changedAt,
+                version = mod.version,
+            )
+            installer.install(archive, modsDir, origin, sha256)
+        }
 
     fun uninstall(folderName: String): Path = installer.uninstall(modsDir, folderName)
 

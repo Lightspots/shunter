@@ -44,10 +44,9 @@ object TfnetFeedParser {
         )
     }
 
-    private fun version(json: JsonElement): String? =
-        json["custom_fields"].obj()?.values
-            ?.firstOrNull { it["label"].str()?.trim()?.lowercase() in VERSION_LABELS }
-            ?.get("value").str()?.trim()?.takeIf { it.isNotEmpty() }
+    private fun version(json: JsonElement): String? = json["custom_fields"].obj()?.values
+        ?.firstOrNull { it["label"].str()?.trim()?.lowercase() in VERSION_LABELS }
+        ?.get("value").str()?.trim()?.takeIf { it.isNotEmpty() }
 
     private fun parseFile(json: JsonElement?): RemoteFile? {
         val id = json["file_id"].long()?.toString() ?: return null
@@ -115,6 +114,5 @@ object ModwerkstattFeedParser {
         )
     }
 
-    private fun resolve(base: String, path: String) =
-        if (path.startsWith("http://") || path.startsWith("https://")) path else base + path
+    private fun resolve(base: String, path: String) = if (path.startsWith("http://") || path.startsWith("https://")) path else base + path
 }
