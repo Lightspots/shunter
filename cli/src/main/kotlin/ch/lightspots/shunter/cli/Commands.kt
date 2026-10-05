@@ -248,8 +248,19 @@ class InstallCommand : ManagerCommand("install") {
 
     override suspend fun execute() {
         val archive = Path(target)
-        if (archive.isRegularFile()) installArchive(archive) else installRemote()
+        when {
+            archive.isRegularFile() -> installArchive(archive)
+
+            // Feed references never look like this, so a missing file is not reported as an unknown feed entry
+            looksLikePath(target) -> throw CliktError(
+                if (archive.exists()) "Not an archive file: $archive" else "Archive not found: $archive",
+            )
+
+            else -> installRemote()
+        }
     }
+
+    private fun looksLikePath(target: String) = '/' in target || ARCHIVE_EXTENSIONS.any { target.endsWith(it, ignoreCase = true) }
 
     private fun installArchive(archive: Path) {
         if (!confirm("Install $archive into ${manager.modsDir}?", yes)) return
@@ -282,6 +293,10 @@ class InstallCommand : ManagerCommand("install") {
         val installed = manager.installRemote(remote) { file -> ConsoleProgress(file.fileName) }
         printInstalled(installed)
         reportProblems(installed.map { ModScanner.read(it.target, ModLocation.LOCAL) }, remote)
+    }
+
+    private companion object {
+        val ARCHIVE_EXTENSIONS = listOf(".zip", ".7z", ".rar")
     }
 }
 
