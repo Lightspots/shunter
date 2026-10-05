@@ -86,17 +86,17 @@ where **issue** and **area** are optional — for example
   directly, or use the one-letter shorthand below; the local `commit-msg` hook
   rewrites the shorthand to the emoji on commit:
 
-  | shorthand | emoji | meaning                        |
-      |-----------|-------|--------------------------------|
-  | `+`       | ✨    | new feature                    |
-  | `!`       | 🚑    | bug fix                        |
-  | `-`       | 🔥    | remove code                    |
-  | `r`       | 🔨    | refactor (no behavior change)  |
-  | `c`       | 📖    | documentation only             |
-  | `t`       | 🚨    | tests                          |
+  | shorthand | emoji | meaning                         |
+  |-----------|-------|---------------------------------|
+  | `+`       | ✨    | new feature                     |
+  | `!`       | 🚑    | bug fix                         |
+  | `-`       | 🔥    | remove code                     |
+  | `r`       | 🔨    | refactor (no behavior change)   |
+  | `c`       | 📖    | documentation only              |
+  | `t`       | 🚨    | tests                           |
   | `v`       | ⬆️    | upgrade dependencies / versions |
-  | `b`       | 💚    | CI                             |
-  | `i`       | 🎉    | initial / project setup        |
+  | `b`       | 💚    | CI / build                      |
+  | `i`       | 🎉    | initial / project setup         |
 
 - **area** – the affected scope in brackets, e.g. `[ui]`, `[service]`,
   `[common]`.
