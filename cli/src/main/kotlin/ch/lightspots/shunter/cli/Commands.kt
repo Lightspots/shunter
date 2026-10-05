@@ -42,6 +42,7 @@ abstract class ManagerCommand(name: String) : CliktCommand(name) {
     protected abstract suspend fun execute()
 
     final override fun run() {
+        logger.info { "Running $commandName" }
         try {
             runBlocking { execute() }
         } catch (e: CliktError) {

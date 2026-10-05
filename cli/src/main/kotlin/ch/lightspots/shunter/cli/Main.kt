@@ -67,9 +67,11 @@ class Shunter(private val logFile: Path? = null) : CliktCommand(name = "shunter"
 
 fun main(args: Array<String>) {
     val logFile = Logging.setup(AppDirs.fromEnvironment(), "cli")
+    // Not the raw arguments: they may hold secrets (an API key), even ones Clikt rejects later
     logger.info {
-        "shunter ${BuildInfo.VERSION} (cli), Java ${Runtime.version()}, " +
-            "${System.getProperty("os.name")} ${System.getProperty("os.version")}, args: ${args.joinToString(" ")}"
+        "shunter ${BuildInfo.VERSION} (cli), Java ${Runtime.version()}, ${System.getProperty(
+            "os.name",
+        )} ${System.getProperty("os.version")}"
     }
     try {
         Shunter(logFile)

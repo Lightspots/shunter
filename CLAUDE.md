@@ -72,6 +72,8 @@ suffix. mod.io packages have only `mod.json` plus content at the top level (no `
   size at startup via `LogRotation`). kotlin-logging prints a startup line on stdout unless
   `-Dkotlin-logging.logStartupMessage=false` is set, so keep that JVM argument. Never log secrets (the
   mod.io API key) and keep library loggers (Ktor) at INFO. `SHUNTER_LOG_LEVEL=debug` raises our own.
+  URLs end up in logs and error messages, Ktor's timeout exceptions included, so secrets must not be
+  part of a URL (no API key as query parameter).
 
 ## Working in the ai-sandbox
 
