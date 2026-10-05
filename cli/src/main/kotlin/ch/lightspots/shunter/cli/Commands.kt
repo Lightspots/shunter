@@ -21,6 +21,7 @@ import com.github.ajalt.clikt.parameters.options.flag
 import com.github.ajalt.clikt.parameters.options.multiple
 import com.github.ajalt.clikt.parameters.options.option
 import com.github.ajalt.clikt.parameters.types.choice
+import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.runBlocking
 import java.nio.file.Path
 import java.time.Duration
@@ -28,6 +29,8 @@ import kotlin.io.path.Path
 import kotlin.io.path.exists
 import kotlin.io.path.isDirectory
 import kotlin.io.path.isRegularFile
+
+private val logger = KotlinLogging.logger {}
 
 /** Base for commands that use the [ModManager]; turns core exceptions into clean error messages. */
 abstract class ManagerCommand(name: String) : CliktCommand(name) {
@@ -42,9 +45,12 @@ abstract class ManagerCommand(name: String) : CliktCommand(name) {
         try {
             runBlocking { execute() }
         } catch (e: CliktError) {
+            logger.info { "$commandName: ${e.message}" }
             throw e
         } catch (e: Exception) {
-            throw CliktError("Error: ${e.message ?: e}", cause = e)
+            logger.error(e) { "$commandName failed" }
+            val details = cli.logFile?.let { "\nDetails are in $it" }.orEmpty()
+            throw CliktError("Error: ${e.message ?: e}$details", cause = e)
         }
     }
 
@@ -151,6 +157,7 @@ class PathsCommand : ManagerCommand("paths") {
         show("  data", manager.appDirs.data)
         show("  cache", manager.appDirs.cache)
         show("  backups", manager.appDirs.backups)
+        show("  log", cliContext.logFile ?: manager.appDirs.logs)
     }
 }
 

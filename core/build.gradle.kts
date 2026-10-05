@@ -51,13 +51,17 @@ dependencies {
     implementation(libs.ktor.client.cio)
     implementation(libs.commons.compress)
     implementation(libs.xz)
+    implementation(libs.kotlin.logging)
 
     testImplementation(platform(libs.junit.bom))
     testImplementation(libs.junit.jupiter)
     testImplementation(kotlin("test-junit5"))
     testRuntimeOnly(libs.junit.platform.launcher)
+    testRuntimeOnly(libs.logback.classic)
 }
 
 tasks.test {
     useJUnitPlatform()
+    // kotlin-logging announces itself on stdout otherwise
+    systemProperty("kotlin-logging.logStartupMessage", "false")
 }

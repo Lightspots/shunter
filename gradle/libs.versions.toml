@@ -6,7 +6,8 @@ kotlinx-coroutines = "1.11.0"
 commons-compress = "1.28.0"
 xz = "1.12"
 ktor = "3.6.0"
-slf4j = "2.0.20"
+kotlin-logging = "8.0.4"
+logback = "1.6.5"
 clikt = "5.1.0"
 junit = "6.1.3"
 spotless = "8.10.3"
@@ -21,8 +22,9 @@ commons-compress = { module = "org.apache.commons:commons-compress", version.ref
 xz = { module = "org.tukaani:xz", version.ref = "xz" }
 ktor-client-core = { module = "io.ktor:ktor-client-core", version.ref = "ktor" }
 ktor-client-cio = { module = "io.ktor:ktor-client-cio", version.ref = "ktor" }
-# Ktor logs through SLF4J, which warns on stderr when no provider is on the classpath
-slf4j-nop = { module = "org.slf4j:slf4j-nop", version.ref = "slf4j" }
+kotlin-logging = { module = "io.github.oshai:kotlin-logging-jvm", version.ref = "kotlin-logging" }
+# SLF4J backend for the frontends; core only uses the kotlin-logging facade. Ktor logs through SLF4J as well
+logback-classic = { module = "ch.qos.logback:logback-classic", version.ref = "logback" }
 clikt = { module = "com.github.ajalt.clikt:clikt", version.ref = "clikt" }
 junit-bom = { module = "org.junit:junit-bom", version.ref = "junit" }
 junit-jupiter = { module = "org.junit.jupiter:junit-jupiter" }

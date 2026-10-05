@@ -67,5 +67,6 @@ class GamePathDetectorTest {
         assertEquals(Path.of("/data/shunter"), dirs.data)
         assertEquals(home.resolve(".cache/shunter"), dirs.cache, "relative XDG paths are invalid per spec")
         assertEquals(home.resolve(".config/shunter"), dirs.config)
+        assertEquals(home.resolve(".local/state/shunter"), dirs.state)
     }
 }

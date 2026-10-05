@@ -8,7 +8,7 @@ import kotlin.io.path.createDirectories
  * Our own folders, following the XDG base directory spec.
  * Nothing of ours is ever written into the game's mod folders except the mods themselves.
  */
-data class AppDirs(val data: Path, val cache: Path, val config: Path) {
+data class AppDirs(val data: Path, val cache: Path, val config: Path, val state: Path) {
     /** Previous versions of mods replaced by an install. */
     val backups: Path get() = data.resolve("backups")
 
@@ -20,6 +20,9 @@ data class AppDirs(val data: Path, val cache: Path, val config: Path) {
 
     /** Scratch space for extracting archives. Kept under [data] so it is likely on the same disk as the game. */
     val work: Path get() = data.resolve("work")
+
+    /** Log files of the frontends, one per frontend (`cli.log`). Created by the frontend's log setup, not [ensureCreated]. */
+    val logs: Path get() = state.resolve("logs")
 
     fun ensureCreated(): AppDirs = apply {
         listOf(data, cache, config, backups, downloads, feeds, work).forEach { it.createDirectories() }
@@ -36,10 +39,11 @@ data class AppDirs(val data: Path, val cache: Path, val config: Path) {
                 data = xdg("XDG_DATA_HOME", ".local/share").resolve(APP_NAME),
                 cache = xdg("XDG_CACHE_HOME", ".cache").resolve(APP_NAME),
                 config = xdg("XDG_CONFIG_HOME", ".config").resolve(APP_NAME),
+                state = xdg("XDG_STATE_HOME", ".local/state").resolve(APP_NAME),
             )
         }
 
         /** Everything below one directory, for tests and portable setups. */
-        fun under(root: Path) = AppDirs(root.resolve("data"), root.resolve("cache"), root.resolve("config"))
+        fun under(root: Path) = AppDirs(root.resolve("data"), root.resolve("cache"), root.resolve("config"), root.resolve("state"))
     }
 }

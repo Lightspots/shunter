@@ -17,10 +17,13 @@ import ch.lightspots.shunter.core.net.DownloadProgress
 import ch.lightspots.shunter.core.net.HttpDownloader
 import ch.lightspots.shunter.core.paths.AppDirs
 import ch.lightspots.shunter.core.paths.GamePaths
+import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.nio.file.Path
 import kotlin.io.path.isDirectory
+
+private val logger = KotlinLogging.logger {}
 
 /** A mod we installed from a feed, with a newer file available there. */
 data class AvailableUpdate(val record: InstallRecord, val remote: RemoteMod, val file: RemoteFile)
@@ -55,6 +58,13 @@ class ModManager(
     val registry: InstallRegistry = InstallRegistry(appDirs.registryFile),
     private val installer: ModInstaller = ModInstaller(appDirs, registry),
 ) {
+
+    init {
+        logger.info {
+            "Mod folders: local ${gamePaths.localMods ?: "not found"}, staging ${gamePaths.stagingArea ?: "not found"}, " +
+                "mod.io ${gamePaths.modIoMods ?: "not found"}"
+        }
+    }
 
     /** Where installs go. */
     val modsDir: Path
