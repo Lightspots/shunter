@@ -34,26 +34,72 @@ class ModIoClientTest {
     private val requests = CopyOnWriteArrayList<Request>()
 
     /** Subscriptions the fake server knows, as mod ids. */
-    private var subscribed = (1L..150L).toList()
+    private var subscribed = (1L..150L).toMutableList()
 
     private val apiUrl get() = "http://127.0.0.1:${server.address.port}/v1"
 
-    data class Request(val path: String, val params: Map<String, String>, val authorization: String?, val language: String?)
+    data class Request(
+        val method: String,
+        val path: String,
+        val params: Map<String, String>,
+        val authorization: String?,
+        val language: String?,
+        val contentType: String?,
+        val body: String,
+    )
 
     @BeforeEach
     fun start() {
         server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
         server.createContext("/v1/") { exchange ->
             val request = Request(
+                method = exchange.requestMethod,
                 path = exchange.requestURI.path.removePrefix("/v1"),
-                params = params(exchange),
+                params = params(exchange.requestURI.rawQuery),
                 authorization = exchange.requestHeaders.getFirst("Authorization"),
                 language = exchange.requestHeaders.getFirst("Accept-Language"),
+                contentType = exchange.requestHeaders.getFirst("Content-Type"),
+                body = String(exchange.requestBody.readAllBytes()),
             )
             requests += request
+            val modPath = Regex("/games/10640/mods/(\\d+)(/.*)?").matchEntire(request.path)
+            val id = modPath?.groupValues?.get(1)?.toLong()
             when {
+                request.authorization == "Bearer $READ_ONLY_TOKEN" && request.method == "GET" -> respond(
+                    exchange,
+                    200,
+                    page(listOf(), 0, 0),
+                )
+
+                // Like mod.io, which wants exactly this type, without a charset
+                request.method != "GET" && request.contentType != "application/x-www-form-urlencoded" ->
+                    respond(exchange, 415, """{"error": {"code": 415, "message": "Incorrect Content-Type header in request."}}""")
+
                 request.authorization != "Bearer $TOKEN" ->
                     respond(exchange, 401, """{"error": {"code": 401, "error_ref": 11005, "message": "Token is invalid."}}""")
+
+                id != null && modPath.groupValues[2] == "" && request.method == "GET" ->
+                    if (id < 1000) respond(exchange, 200, modJson(id)) else respond(exchange, 404, """{"error": {"code": 404}}""")
+
+                id != null && modPath.groupValues[2] == "/dependencies" -> respond(
+                    exchange,
+                    200,
+                    page(listOf(id + 1, id + 2, id + 1), 0, 3),
+                )
+
+                id != null && modPath.groupValues[2] == "/subscribe" && request.method == "POST" -> {
+                    val already = id in subscribed
+                    if (!already) subscribed.add(id)
+                    respond(exchange, if (already) 200 else 201, modJson(id))
+                }
+
+                id != null && modPath.groupValues[2] == "/subscribe" && request.method == "DELETE" ->
+                    if (subscribed.remove(id)) {
+                        exchange.sendResponseHeaders(204, -1)
+                        exchange.close()
+                    } else {
+                        respond(exchange, 400, """{"error": {"code": 400, "error_ref": 15005, "message": "Not subscribed."}}""")
+                    }
 
                 request.path == "/me" -> respond(exchange, 200, """{"id": 7, "name_id": "anna", "username": "Anna"}""")
 
@@ -62,6 +108,9 @@ class ModIoClientTest {
                     val limit = request.params["_limit"]!!.toInt()
                     respond(exchange, 200, page(subscribed.drop(offset).take(limit), offset, subscribed.size))
                 }
+
+                request.path == "/games/10640/mods" && request.params["name_id"] != null ->
+                    respond(exchange, 200, if (request.params["name_id"] == "mod-5") page(listOf(5), 0, 1) else page(listOf(), 0, 0))
 
                 request.path == "/games/10640/mods" -> respond(exchange, 200, page(listOf(42), 0, 300))
 
@@ -152,7 +201,7 @@ class ModIoClientTest {
 
     @Test
     fun `subscriptions are matched with the mod io folder by id`() = runBlocking {
-        subscribed = listOf(1L, 2L)
+        subscribed = mutableListOf(1L, 2L)
         val manager = manager()
         assertNull(manager.modIoSubscriptions(), "not signed in")
 
@@ -167,6 +216,51 @@ class ModIoClientTest {
         assertEquals("Mod 2", subscriptions.subscriptionOf(two)?.name)
     }
 
+    @Test
+    fun `finds mods by id, name id and address`() = runBlocking {
+        val client = client()
+
+        assertEquals(5L, client.findMod("5")?.id)
+        assertEquals(5L, client.findMod("mod-5")?.id)
+        assertEquals(5L, client.findMod("https://mod.io/g/transportfever3/m/mod-5/?tab=files#x")?.id)
+        assertNull(client.findMod("1234"), "404")
+        assertNull(client.findMod("unknown"))
+    }
+
+    @Test
+    fun `lists dependencies once, recursively`() = runBlocking {
+        assertEquals(listOf(6L, 7L), client().dependencies(5).map { it.id })
+        assertEquals("true", requests.single().params["recursive"])
+    }
+
+    @Test
+    fun `subscribes with dependencies and unsubscribes`() = runBlocking {
+        subscribed = mutableListOf(1L)
+        val client = client()
+
+        val result = client.subscribe(5)
+        assertEquals(ModIoSubscribeResult(result.mod, alreadySubscribed = false), result)
+        assertEquals(5L, result.mod.id)
+        val post = requests.last()
+        assertEquals("POST", post.method)
+        assertEquals("include_dependencies=true", post.body)
+        assertTrue(client.subscribe(5).alreadySubscribed)
+
+        assertTrue(client.unsubscribe(5))
+        assertEquals("DELETE", requests.last().method)
+        assertFalse(client.unsubscribe(5), "not subscribed any more")
+        assertEquals(listOf(1L), subscribed)
+    }
+
+    @Test
+    fun `a change refused for a read-only token says so`() = runBlocking {
+        val client = ModIoClient(http, ModIoLogin(READ_ONLY_TOKEN), apiUrl)
+        client.subscribedMods()
+
+        val e = assertThrows<ModIoAuthException> { client.subscribe(5) }
+        assertTrue(e.message!!.contains("read-only"), e.message)
+    }
+
     private fun manager() = ModManager(
         GamePaths(null, tmp.resolve("local/mods"), null, tmp.resolve("modio")),
         AppDirs.under(tmp.resolve("app")),
@@ -174,7 +268,7 @@ class ModIoClientTest {
         modIoApiUrl = apiUrl,
     )
 
-    private fun params(exchange: HttpExchange): Map<String, String> = exchange.requestURI.rawQuery.orEmpty()
+    private fun params(query: String?): Map<String, String> = query.orEmpty()
         .split('&')
         .filter { it.isNotEmpty() }
         .associate {
@@ -210,5 +304,6 @@ class ModIoClientTest {
 
     private companion object {
         const val TOKEN = "test-token-123"
+        const val READ_ONLY_TOKEN = "read-only-token"
     }
 }

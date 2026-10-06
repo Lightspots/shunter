@@ -63,9 +63,13 @@ internal object ModIoParser {
         )
     }
 
-    /** The `message` of a mod.io error response (`{"error": {"code": 401, "message": …}}`), if [body] is one. */
-    fun errorMessage(body: String?): String? {
+    /** mod.io's explanation in an error response (`{"error": {"code": 401, "error_ref": 11005, "message": …}}`), if [body] is one. */
+    fun error(body: String?): ModIoError? {
         val json = body?.let { runCatching { parseJsonText(it) }.getOrNull() } ?: return null
-        return json["error"]["message"].str()?.takeIf { it.isNotBlank() }
+        val error = json["error"] ?: return null
+        return ModIoError(error["error_ref"].int(), error["message"].str()?.takeIf { it.isNotBlank() })
     }
 }
+
+/** The `error` object of a mod.io error response. */
+internal data class ModIoError(val ref: Int?, val message: String?)
