@@ -68,11 +68,19 @@ abstract class ManagerCommand(name: String) : CliktCommand(name) {
     protected suspend fun <T> withDownloadBars(block: suspend (newBar: (label: String) -> DownloadProgress) -> T): T {
         val bars = mutableListOf<DownloadBar>()
         try {
-            return block { label -> DownloadBar(terminal, label).also { bars += it } }
+            return block { label ->
+                // Downloads run one after another; two animated bars at once would overwrite each other's lines
+                bars.lastOrNull()?.let(::closeBar)
+                DownloadBar(terminal, label).also { bars += it }
+            }
         } finally {
-            // A bar that fails to stop must neither keep the others running nor hide the block's exception
-            bars.forEach { bar -> runCatching { bar.close() }.onFailure { logger.warn(it) { "Could not stop progress bar" } } }
+            bars.forEach(::closeBar)
         }
+    }
+
+    // A bar that fails to stop must neither keep the others running nor hide the block's exception
+    private fun closeBar(bar: DownloadBar) {
+        runCatching { bar.close() }.onFailure { logger.warn(it) { "Could not stop progress bar" } }
     }
 
     protected fun confirm(question: String, assumeYes: Boolean): Boolean {
