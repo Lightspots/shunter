@@ -14,8 +14,8 @@ See README.md for usage.
     "Werkzeuge & Tools" / `mod_type: script`. Installing one downloads it, then fails with
     "no mod.json". `script` also covers real script mods, so it is not a reliable filter.
   - Required dependencies are reported (with the `install` command), not installed automatically.
-  - mod.io: `modio login/logout/search/subscribe/unsubscribe`, subscriptions in `list`. Not verified
-    yet: that the game picks up subscriptions made outside it on its next start. Next: email
+  - mod.io: `modio login/logout/search/subscribe/unsubscribe`, subscriptions in `list`. The game
+    downloads subscriptions made by shunter on its next start (verified). Next: email
     sign-in (`/oauth/emailrequest` + `/oauth/emailexchange`, needs an API key in the POST body),
     token in the Secret Service instead of a file.
   - modwerkstatt's `/tpfmm/` feed works but only lists `game: "tpf2"` so far; its TF3 mods are
