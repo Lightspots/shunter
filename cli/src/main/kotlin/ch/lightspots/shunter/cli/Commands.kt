@@ -10,7 +10,10 @@ import ch.lightspots.shunter.core.install.InstalledFolder
 import ch.lightspots.shunter.core.mod.InstalledMod
 import ch.lightspots.shunter.core.mod.ModLocation
 import ch.lightspots.shunter.core.mod.ModScanner
+import ch.lightspots.shunter.core.modio.ModIoAuthException
+import ch.lightspots.shunter.core.modio.ModIoSubscriptions
 import ch.lightspots.shunter.core.net.DownloadProgress
+import ch.lightspots.shunter.core.readableMessage
 import com.github.ajalt.clikt.core.CliktCommand
 import com.github.ajalt.clikt.core.CliktError
 import com.github.ajalt.clikt.core.Context
@@ -25,6 +28,7 @@ import com.github.ajalt.clikt.parameters.options.option
 import com.github.ajalt.clikt.parameters.types.choice
 import com.github.ajalt.mordant.rendering.TextStyles
 import io.github.oshai.kotlinlogging.KotlinLogging
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.runBlocking
 import java.nio.file.Path
 import java.time.Duration
@@ -202,36 +206,72 @@ class PathsCommand : ManagerCommand("paths") {
 }
 
 class ListCommand : ManagerCommand("list") {
-    override fun help(context: Context) = "List installed mods from all mod folders."
+    override fun help(context: Context) =
+        "List installed mods from all mod folders. When signed in to mod.io, mod.io mods are compared with your subscriptions."
 
     private val locations by option("--location", "-l", help = "Only these locations")
         .choice(ModLocation.entries.associateBy { it.label })
         .multiple()
 
     override suspend fun execute() {
-        val mods = manager.scan(locations.ifEmpty { ModLocation.entries })
-        if (mods.isEmpty()) {
+        val shown = locations.ifEmpty { ModLocation.entries }
+        val mods = manager.scan(shown)
+        val modIoMods = mods.filter { it.location == ModLocation.MOD_IO }
+        val modIo = if (ModLocation.MOD_IO in shown) loadModIoSubscriptions(modIoMods) else null
+        val notDownloaded = modIo?.notDownloaded.orEmpty()
+        if (mods.isEmpty() && notDownloaded.isEmpty()) {
             echo("No mods found.")
             return
         }
         val records = manager.gamePaths.localMods?.let { manager.registry.records(it) }.orEmpty()
-        echo(
-            table(
-                listOf("LOCATION", "FOLDER", "MOD ID", "REV", "SOURCE", "NAME"),
-                mods.map { mod ->
-                    val origin = records[mod.folderName]?.takeIf { mod.location == ModLocation.LOCAL }?.origin
-                    listOf(
-                        mod.location.label,
-                        mod.folderName,
-                        mod.modId ?: "?",
-                        mod.manifest?.revision?.toString() ?: "?",
-                        origin?.ref ?: "",
-                        mod.displayName(language),
-                    )
-                },
-            ),
-        )
+        if (mods.isNotEmpty()) {
+            echo(
+                table(
+                    listOf("LOCATION", "FOLDER", "MOD ID", "REV", "SOURCE", "NAME"),
+                    mods.map { mod ->
+                        val subscription = modIo?.takeIf { mod.location == ModLocation.MOD_IO }?.subscriptionOf(mod)
+                        val source = when {
+                            mod.location == ModLocation.LOCAL -> records[mod.folderName]?.origin?.ref ?: ""
+                            mod.location != ModLocation.MOD_IO || modIo == null -> ""
+                            subscription != null -> "subscribed"
+                            else -> warning("not subscribed")
+                        }
+                        listOf(
+                            mod.location.label,
+                            mod.folderName,
+                            mod.modId ?: "?",
+                            mod.manifest?.revision?.toString() ?: "?",
+                            source,
+                            // mod.io packages have no _metadata, so the name comes from mod.io
+                            if (mod.metadata == null) subscription?.name ?: mod.displayName(language) else mod.displayName(language),
+                        )
+                    },
+                ),
+            )
+        }
+        if (notDownloaded.isNotEmpty()) {
+            echo("${bold("Subscribed on mod.io, not downloaded yet")} ${muted("(the game downloads them when it starts):")}")
+            notDownloaded.forEach { echo("  ${it.name} ${muted("(mod.io ${it.id})")}") }
+        }
+        if (modIo == null && modIoMods.isNotEmpty() && manager.modIoLogins.load() == null) {
+            echo(muted("Sign in to mod.io to see names and subscriptions of mod.io mods: shunter modio login"))
+        }
         reportProblems(mods)
+    }
+
+    /** The subscriptions, or null with a warning when they cannot be loaded; the list works without them. */
+    private suspend fun loadModIoSubscriptions(installed: List<InstalledMod>): ModIoSubscriptions? = try {
+        manager.modIoSubscriptions(language, installed)
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: ModIoAuthException) {
+        logger.warn(e) { "Could not load mod.io subscriptions" }
+        echo("${warning("Warning:")} ${e.message}\n  $MOD_IO_RELOGIN_HINT", err = true)
+        null
+    } catch (e: Exception) {
+        logger.warn(e) { "Could not load mod.io subscriptions" }
+        echo("${warning("Warning:")} could not load mod.io subscriptions (${e.readableMessage()})", err = true)
+        null
     }
 }
 

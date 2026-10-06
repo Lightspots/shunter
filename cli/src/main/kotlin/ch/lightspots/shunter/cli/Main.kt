@@ -86,6 +86,7 @@ fun main(args: Array<String>) {
                 UpdatesCommand(),
                 UpdateCommand(),
                 RemoveCommand(),
+                ModIoCommand(),
             )
             .main(args)
     } catch (e: Exception) {

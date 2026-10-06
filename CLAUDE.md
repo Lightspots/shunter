@@ -14,8 +14,10 @@ See README.md for usage.
     "Werkzeuge & Tools" / `mod_type: script`. Installing one downloads it, then fails with
     "no mod.json". `script` also covers real script mods, so it is not a reliable filter.
   - Required dependencies are reported (with the `install` command), not installed automatically.
-  - mod.io API not connected yet (game id 10640, `https://g-10640.modapi.io/v1`, needs a user
-    API key from mod.io/me/access). Subscribed mods are already shown by `list`.
+  - mod.io: `modio login/logout/search/subscribe/unsubscribe`, subscriptions in `list`. The game
+    downloads subscriptions made by shunter on its next start (verified). Next: email
+    sign-in (`/oauth/emailrequest` + `/oauth/emailexchange`, needs an API key in the POST body),
+    token in the Secret Service instead of a file.
   - modwerkstatt's `/tpfmm/` feed works but only lists `game: "tpf2"` so far; its TF3 mods are
     supporter-only for now.
 
@@ -47,6 +49,13 @@ suffix. mod.io packages have only `mod.json` plus content at the top level (no `
   found by extracting. Version is in `custom_fields` with label "Aktuelle Version".
   Dependencies point to other entries (`entry_id`) and carry an `install` block.
 - modwerkstatt.com: `https://modwerkstatt.com/tpfmm/`, `mods[].files[]` with `foldername`.
+- mod.io: REST API v1 at `https://g-10640.modapi.io/v1` (`api.mod.io` is retired). Authenticated
+  only with an OAuth access token (`Authorization: Bearer`), never the API key, which mod.io only
+  takes as `?api_key=` query parameter. The token is a personal access token from mod.io/me/access,
+  stored in `AppDirs.modIoLoginFile` (mode 600); `ModIoLogin.toString` hides it. The game's Mod Hub
+  downloads subscribed mods, we never write to the mod.io folder. "Sign in with Steam" in the
+  Windows tools is the browser plus personal access token flow; `/external/steamauth` needs a Steam
+  app ticket of the game itself.
 
 ## Rules
 

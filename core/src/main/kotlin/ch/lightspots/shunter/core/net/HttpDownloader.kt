@@ -6,12 +6,19 @@ import io.ktor.client.HttpClient
 import io.ktor.client.engine.cio.CIO
 import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.plugins.UserAgent
-import io.ktor.client.request.get
+import io.ktor.client.request.header
 import io.ktor.client.request.prepareGet
+import io.ktor.client.request.request
+import io.ktor.client.request.setBody
 import io.ktor.client.statement.HttpResponse
 import io.ktor.client.statement.bodyAsChannel
 import io.ktor.client.statement.bodyAsText
+import io.ktor.http.ContentType
+import io.ktor.http.HttpMethod
+import io.ktor.http.Parameters
+import io.ktor.http.content.TextContent
 import io.ktor.http.contentLength
+import io.ktor.http.formUrlEncode
 import io.ktor.http.isSuccess
 import io.ktor.utils.io.readAvailable
 import kotlinx.coroutines.Dispatchers
@@ -32,7 +39,13 @@ import kotlin.io.path.outputStream
 
 private val logger = KotlinLogging.logger {}
 
-class DownloadException(message: String, cause: Throwable? = null) : IOException(message, cause)
+open class DownloadException(message: String, cause: Throwable? = null) : IOException(message, cause)
+
+/** The server answered with an error status. [body] holds the start of the response, which APIs use to explain the error. */
+class HttpStatusException(val status: Int, val url: String, val body: String? = null) : DownloadException("HTTP $status for $url")
+
+/** A successful response read as text. */
+data class HttpText(val status: Int, val text: String)
 
 /** Called on a background thread while downloading. [total] is null when the server does not send a length. */
 fun interface DownloadProgress {
@@ -45,11 +58,33 @@ fun interface DownloadProgress {
  */
 class HttpDownloader(private val client: HttpClient = defaultClient()) : AutoCloseable {
 
-    suspend fun fetchText(url: String): String {
-        logger.debug { "GET $url" }
-        val response = client.get(url)
-        checkStatus(url, response)
-        return response.bodyAsText(Charsets.UTF_8)
+    /** [headers] are sent with the request but never logged, so they may carry credentials. */
+    suspend fun fetchText(url: String, headers: Map<String, String> = emptyMap()): String = request(HttpMethod.Get, url, headers).text
+
+    /**
+     * Sends a request and reads the answer as text, for APIs. [form] is sent as
+     * `application/x-www-form-urlencoded` body, without a charset parameter: mod.io refuses the
+     * `; charset=UTF-8` Ktor's `FormDataContent` adds (HTTP 415). [headers] are never logged. An error status throws
+     * [HttpStatusException] with the start of the body.
+     */
+    suspend fun request(
+        method: HttpMethod,
+        url: String,
+        headers: Map<String, String> = emptyMap(),
+        form: Map<String, String>? = null,
+    ): HttpText {
+        logger.debug { "${method.value} $url" }
+        val response = client.request(url) {
+            this.method = method
+            headers.forEach { (name, value) -> header(name, value) }
+            form?.let { fields ->
+                val encoded = Parameters.build { fields.forEach { (name, value) -> append(name, value) } }.formUrlEncode()
+                setBody(TextContent(encoded, ContentType.Application.FormUrlEncoded))
+            }
+        }
+        val text = response.bodyAsText(Charsets.UTF_8)
+        if (!response.status.isSuccess()) throw HttpStatusException(response.status.value, url, text.take(MAX_ERROR_BODY))
+        return HttpText(response.status.value, text)
     }
 
     /**
@@ -110,10 +145,12 @@ class HttpDownloader(private val client: HttpClient = defaultClient()) : AutoClo
     override fun close() = client.close()
 
     private fun checkStatus(url: String, response: HttpResponse) {
-        if (!response.status.isSuccess()) throw DownloadException("HTTP ${response.status.value} for $url")
+        if (!response.status.isSuccess()) throw HttpStatusException(response.status.value, url)
     }
 
     companion object {
+        private const val MAX_ERROR_BODY = 4000
+
         /** Follows redirects (Ktor's default). No overall request timeout, so large files can take their time. */
         fun defaultClient(userAgent: String = "shunter/${BuildInfo.VERSION}"): HttpClient = HttpClient(CIO) {
             install(UserAgent) { agent = userAgent }
