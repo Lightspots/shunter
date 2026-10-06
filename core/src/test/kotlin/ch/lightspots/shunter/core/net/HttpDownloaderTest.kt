@@ -58,6 +58,12 @@ class HttpDownloaderTest {
                 releaseSlow.await()
             }
         }
+        server.createContext("/api") { exchange ->
+            val ok = exchange.requestHeaders.getFirst("Authorization") == "Bearer abc"
+            val body = (if (ok) "{}" else "{\"error\": \"no\"}").toByteArray()
+            exchange.sendResponseHeaders(if (ok) 200 else 401, body.size.toLong())
+            exchange.responseBody.use { it.write(body) }
+        }
         server.createContext("/feed") { exchange ->
             val body = "{\"ok\": \"äö\"}".toByteArray()
             exchange.sendResponseHeaders(200, body.size.toLong())
@@ -117,6 +123,15 @@ class HttpDownloaderTest {
     @Test
     fun `fetches text as utf-8`() = runBlocking {
         assertEquals("{\"ok\": \"äö\"}", http.fetchText("$baseUrl/feed"))
+    }
+
+    @Test
+    fun `fetchText sends headers and keeps the body of error responses`() = runBlocking {
+        assertEquals("{}", http.fetchText("$baseUrl/api", mapOf("Authorization" to "Bearer abc")))
+
+        val e = assertThrows<HttpStatusException> { http.fetchText("$baseUrl/api") }
+        assertEquals(401, e.status)
+        assertEquals("{\"error\": \"no\"}", e.body)
     }
 
     @Test

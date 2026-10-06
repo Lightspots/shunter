@@ -13,6 +13,11 @@ import ch.lightspots.shunter.core.mod.InstalledMod
 import ch.lightspots.shunter.core.mod.ModLocation
 import ch.lightspots.shunter.core.mod.ModReference
 import ch.lightspots.shunter.core.mod.ModScanner
+import ch.lightspots.shunter.core.modio.ModIoClient
+import ch.lightspots.shunter.core.modio.ModIoLogin
+import ch.lightspots.shunter.core.modio.ModIoLoginStore
+import ch.lightspots.shunter.core.modio.ModIoSubscriptions
+import ch.lightspots.shunter.core.modio.ModIoUser
 import ch.lightspots.shunter.core.net.DownloadProgress
 import ch.lightspots.shunter.core.net.HttpDownloader
 import ch.lightspots.shunter.core.paths.AppDirs
@@ -57,6 +62,8 @@ class ModManager(
     private val http: HttpDownloader = HttpDownloader(),
     val registry: InstallRegistry = InstallRegistry(appDirs.registryFile),
     private val installer: ModInstaller = ModInstaller(appDirs, registry),
+    val modIoLogins: ModIoLoginStore = ModIoLoginStore(appDirs.modIoLoginFile),
+    private val modIoApiUrl: String = ModIoClient.DEFAULT_API_URL,
 ) {
 
     init {
@@ -100,6 +107,31 @@ class ModManager(
         }
 
     fun uninstall(folderName: String): Path = installer.uninstall(modsDir, folderName)
+
+    /** A client for the signed-in mod.io account, null when not signed in. [language] picks translated names. */
+    fun modIo(language: String? = null): ModIoClient? = modIoLogins.load()?.let { ModIoClient(http, it, modIoApiUrl, language) }
+
+    /** Checks [accessToken] with mod.io and stores it. Nothing is stored when mod.io refuses it. */
+    suspend fun modIoLogin(accessToken: String): ModIoUser {
+        val token = accessToken.trim()
+        require(token.isNotEmpty()) { "The access token is empty" }
+        val user = ModIoClient(http, ModIoLogin(token), modIoApiUrl).me()
+        withContext(Dispatchers.IO) { modIoLogins.save(ModIoLogin(token, user.username)) }
+        return user
+    }
+
+    /** Forgets the stored token. Returns false when there was none. */
+    fun modIoLogout(): Boolean = modIoLogins.clear()
+
+    /**
+     * Subscriptions of the signed-in user compared with the mod.io folder; null when not signed in.
+     * [installed] is the scanned mod.io folder, if the caller has it already.
+     */
+    suspend fun modIoSubscriptions(language: String? = null, installed: List<InstalledMod>? = null): ModIoSubscriptions? {
+        val client = modIo(language) ?: return null
+        val subscribed = client.subscribedMods()
+        return ModIoSubscriptions(subscribed, installed ?: withContext(Dispatchers.IO) { scan(listOf(ModLocation.MOD_IO)) })
+    }
 
     /** Mods installed from a feed whose entry now offers a different file. Skips mods in [changedOutside]. */
     fun availableUpdates(feeds: List<FeedResult>): List<AvailableUpdate> {
