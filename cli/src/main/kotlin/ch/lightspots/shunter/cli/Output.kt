@@ -89,6 +89,8 @@ internal class DownloadBar(private val terminal: Terminal, private val label: St
             // Let it draw the final 100% frame; stop() also shows the cursor again
             if (bar.finished) runCatching { drawing?.get() }
             bar.stop()
+            this.bar = null
+            drawing = null
         }
     }
 }

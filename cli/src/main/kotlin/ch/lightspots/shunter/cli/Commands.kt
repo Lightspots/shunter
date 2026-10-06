@@ -70,7 +70,8 @@ abstract class ManagerCommand(name: String) : CliktCommand(name) {
         try {
             return block { label -> DownloadBar(terminal, label).also { bars += it } }
         } finally {
-            bars.forEach { it.close() }
+            // A bar that fails to stop must neither keep the others running nor hide the block's exception
+            bars.forEach { bar -> runCatching { bar.close() }.onFailure { logger.warn(it) { "Could not stop progress bar" } } }
         }
     }
 
