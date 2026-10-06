@@ -2,6 +2,7 @@ package ch.lightspots.shunter.core.feed
 
 import ch.lightspots.shunter.core.net.HttpDownloader
 import ch.lightspots.shunter.core.paths.AppDirs
+import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -14,6 +15,8 @@ import kotlin.io.path.exists
 import kotlin.io.path.getLastModifiedTime
 import kotlin.io.path.readText
 import kotlin.io.path.writeText
+
+private val logger = KotlinLogging.logger {}
 
 /** Result of loading a feed. [error] is set when refreshing failed and an older copy was used instead. */
 data class FeedResult(val source: FeedSource, val mods: List<RemoteMod>, val fetchedAt: Instant, val error: String? = null)
@@ -29,6 +32,7 @@ class FeedService(
         val cached = cacheFile(source)
         val cachedAt = if (cached.exists()) cached.getLastModifiedTime().toInstant() else null
         if (cachedAt != null && Duration.between(cachedAt, clock.instant()) < maxAge) {
+            logger.debug { "Using cached ${source.label} mod list from $cachedAt" }
             return@withContext FeedResult(source, parse(source, cached.readText()), cachedAt)
         }
         try {
@@ -37,11 +41,13 @@ class FeedService(
             val mods = parse(source, text)
             cached.parent.createDirectories()
             cached.writeText(text)
+            logger.info { "Fetched ${source.label} mod list: ${mods.size} mods" }
             FeedResult(source, mods, clock.instant())
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
             if (cachedAt == null) throw e
+            logger.warn(e) { "Could not refresh ${source.label} mod list, using copy from $cachedAt" }
             FeedResult(source, parse(source, cached.readText()), cachedAt, error = e.message ?: e.toString())
         }
     }

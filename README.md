@@ -26,6 +26,9 @@ shunter remove <folder>       # moves the mod to the backups
 
 Try things out without touching the game with `--mods-dir /some/test/folder`.
 
+What Shunter did, and the details of errors, is logged to `~/.local/state/shunter/logs/cli.log`
+(attach it to bug reports). Run with `SHUNTER_LOG_LEVEL=debug` for more detail.
+
 ## Where things are
 
 | What                                   | Folder                                                          |
@@ -35,6 +38,7 @@ Try things out without touching the game with `--mods-dir /some/test/folder`.
 | mod.io / Mod Hub subscriptions         | `~/mod.io/common/10640/mods` (read only, the game manages them) |
 | Shunter data: install records, backups | `~/.local/share/shunter`                                        |
 | Shunter cache: downloads, mod lists    | `~/.cache/shunter`                                              |
+| Shunter logs                           | `~/.local/state/shunter/logs`                                   |
 
 ## Safety
 
@@ -44,7 +48,7 @@ Mods are downloaded from the internet and unpacked into your game folders, so Sh
 - Archive entries that would land outside the target folder (`../`, absolute paths) or are
   symlinks are refused.
 - Installing over an existing mod moves the old version to the backups first (the last two are
-  kept); if the install fails, the old version is put back. `settings.lua` is carried over.
+  kept); if the install fails, the old version is put back.
 - Only `local/mods` is ever written. Nothing of Shunter's own is stored in the game folders.
 
 ## Mod sources
@@ -57,7 +61,7 @@ Mods are downloaded from the internet and unpacked into your game folders, so Sh
 
 ## Development
 
-Kotlin/JVM 21+, Gradle. Modules: `core` (everything except the UI, no UI dependencies), `cli`.
+Kotlin/JVM 25+, Gradle. Modules: `core` (everything except the UI, no UI dependencies), `cli`.
 
 ```sh
 ./gradlew build

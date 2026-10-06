@@ -5,6 +5,7 @@ import ch.lightspots.shunter.core.ModManager
 import ch.lightspots.shunter.core.net.HttpDownloader
 import ch.lightspots.shunter.core.paths.AppDirs
 import ch.lightspots.shunter.core.paths.GamePathDetector
+import ch.lightspots.shunter.core.readableMessage
 import com.github.ajalt.clikt.core.CliktCommand
 import com.github.ajalt.clikt.core.Context
 import com.github.ajalt.clikt.core.main
@@ -13,12 +14,25 @@ import com.github.ajalt.clikt.core.subcommands
 import com.github.ajalt.clikt.parameters.options.option
 import com.github.ajalt.clikt.parameters.options.versionOption
 import com.github.ajalt.clikt.parameters.types.path
+import com.github.ajalt.mordant.rendering.Theme
+import com.github.ajalt.mordant.terminal.Terminal
+import io.github.oshai.kotlinlogging.KotlinLogging
+import java.nio.file.Path
 import java.util.Locale
+import kotlin.system.exitProcess
 
-/** Shared state for all subcommands, created by [Shunter]. */
-class CliContext(val detector: GamePathDetector, val manager: ModManager, val http: HttpDownloader, val language: String)
+private val logger = KotlinLogging.logger {}
 
-class Shunter : CliktCommand(name = "shunter") {
+/** Shared state for all subcommands, created by [Shunter]. [logFile] is null when logging is off. */
+class CliContext(
+    val detector: GamePathDetector,
+    val manager: ModManager,
+    val http: HttpDownloader,
+    val language: String,
+    val logFile: Path? = null,
+)
+
+class Shunter(private val logFile: Path? = null) : CliktCommand(name = "shunter") {
     override fun help(context: Context) = "Mod manager for Transport Fever 3 on Linux."
 
     private val modsDir by option(
@@ -49,19 +63,40 @@ class Shunter : CliktCommand(name = "shunter") {
                 manager = ModManager(paths, AppDirs.fromEnvironment(), http),
                 http = http,
                 language = language ?: Locale.getDefault().language,
+                logFile = logFile,
             )
         }
     }
 }
 
-fun main(args: Array<String>) = Shunter()
-    .subcommands(
-        PathsCommand(),
-        ListCommand(),
-        SearchCommand(),
-        InstallCommand(),
-        UpdatesCommand(),
-        UpdateCommand(),
-        RemoveCommand(),
-    )
-    .main(args)
+fun main(args: Array<String>) {
+    val logFile = Logging.setup(AppDirs.fromEnvironment(), "cli")
+    // Not the raw arguments: they may hold secrets (an API key), even ones Clikt rejects later
+    logger.info {
+        "shunter ${BuildInfo.VERSION} (cli), Java ${Runtime.version()}, " +
+            "${System.getProperty("os.name")} ${System.getProperty("os.version")}"
+    }
+    try {
+        Shunter(logFile)
+            .subcommands(
+                PathsCommand(),
+                ListCommand(),
+                SearchCommand(),
+                InstallCommand(),
+                UpdatesCommand(),
+                UpdateCommand(),
+                RemoveCommand(),
+            )
+            .main(args)
+    } catch (e: Exception) {
+        // Clikt prints CliktErrors itself and ManagerCommand turns the subcommands' exceptions into one;
+        // this catches the rest, e.g. from detecting the game folders in Shunter.run
+        logger.error(e) { "Unexpected error" }
+        Terminal().println(errorMessage(e, logFile), stderr = true)
+        exitProcess(1)
+    }
+}
+
+/** Error text for an unexpected exception, pointing to the log file for the details. Print it through a Mordant terminal. */
+fun errorMessage(e: Exception, logFile: Path?): String =
+    "${Theme.Default.danger("Error:")} ${e.readableMessage()}" + logFile?.let { "\n" + Theme.Default.muted("Details are in $it") }.orEmpty()

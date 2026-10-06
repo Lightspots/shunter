@@ -1,6 +1,7 @@
 package ch.lightspots.shunter.core.net
 
 import ch.lightspots.shunter.core.BuildInfo
+import io.github.oshai.kotlinlogging.KotlinLogging
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.cio.CIO
 import io.ktor.client.plugins.HttpTimeout
@@ -29,6 +30,8 @@ import kotlin.io.path.inputStream
 import kotlin.io.path.moveTo
 import kotlin.io.path.outputStream
 
+private val logger = KotlinLogging.logger {}
+
 class DownloadException(message: String, cause: Throwable? = null) : IOException(message, cause)
 
 /** Called on a background thread while downloading. [total] is null when the server does not send a length. */
@@ -43,6 +46,7 @@ fun interface DownloadProgress {
 class HttpDownloader(private val client: HttpClient = defaultClient()) : AutoCloseable {
 
     suspend fun fetchText(url: String): String {
+        logger.debug { "GET $url" }
         val response = client.get(url)
         checkStatus(url, response)
         return response.bodyAsText(Charsets.UTF_8)
@@ -61,10 +65,12 @@ class HttpDownloader(private val client: HttpClient = defaultClient()) : AutoClo
         progress: DownloadProgress? = null,
     ): String = withContext(Dispatchers.IO) {
         if (expectedSha256 != null && dest.exists() && sha256(dest).equals(expectedSha256, ignoreCase = true)) {
+            logger.info { "Using $dest downloaded before, checksum matches" }
             return@withContext expectedSha256.lowercase()
         }
         dest.parent.createDirectories()
         val part = dest.resolveSibling("${dest.fileName}.part")
+        logger.info { "Downloading $url to $dest" }
         try {
             client.prepareGet(url).execute { response ->
                 checkStatus(url, response)
@@ -93,6 +99,7 @@ class HttpDownloader(private val client: HttpClient = defaultClient()) : AutoClo
                     throw DownloadException("Checksum mismatch for $url: expected $expectedSha256 but got $actual")
                 }
                 part.moveTo(dest, StandardCopyOption.REPLACE_EXISTING)
+                logger.info { "Downloaded ${dest.fileName}: $downloaded bytes, sha256 $actual" }
                 actual
             }
         } finally {

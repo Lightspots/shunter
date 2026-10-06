@@ -1,5 +1,6 @@
 package ch.lightspots.shunter.core.archive
 
+import ch.lightspots.shunter.core.readableMessage
 import org.apache.commons.compress.archivers.sevenz.SevenZFile
 import org.apache.commons.compress.archivers.zip.ZipFile
 import java.io.IOException
@@ -54,7 +55,7 @@ object ArchiveExtractor {
         } catch (e: ArchiveException) {
             throw e
         } catch (e: IOException) {
-            throw ArchiveException("Failed to extract $archive: ${e.message}", e)
+            throw ArchiveException("Failed to extract $archive: ${e.readableMessage()}", e)
         }
     }
 

@@ -1,0 +1,50 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  # So a release can gate on exactly the checks a PR gets, rather than a second copy of them.
+  workflow_call:
+
+permissions:
+  contents: read
+
+# Cancel superseded runs of a PR (e.g. rapid pushes). Keyed by PR number, not branch name, so two
+# forks with the same branch name do not cancel each other. The number is only set for pull
+# requests, so every other run (pushes to main) gets a group of its own and runs to completion.
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Gradle tests
+    runs-on: ubuntu-latest
+    steps:
+      # The build needs no authenticated git, so the token is not left behind for the PR's build code.
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up JDK 25
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '25'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
+
+      # `check` aggregates every module's verification tasks: the tests and
+      # spotlessCheck (ktlint formatting).
+      - name: Check
+        run: ./gradlew check --stacktrace
+
+      - name: Upload test reports
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-reports
+          path: "*/build/reports/tests/"
+          if-no-files-found: ignore

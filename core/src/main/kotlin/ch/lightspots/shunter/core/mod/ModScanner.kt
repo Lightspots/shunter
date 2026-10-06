@@ -1,5 +1,6 @@
 package ch.lightspots.shunter.core.mod
 
+import ch.lightspots.shunter.core.readableMessage
 import java.nio.file.Path
 import kotlin.io.path.isDirectory
 import kotlin.io.path.isRegularFile
@@ -33,7 +34,7 @@ object ModScanner {
         val manifestFile = folder.resolve(ModManifest.FILE_NAME)
         val manifest = if (manifestFile.isRegularFile()) {
             runCatching { ModManifest.read(manifestFile) }
-                .onFailure { problems += "Broken ${ModManifest.FILE_NAME}: ${it.message}" }
+                .onFailure { problems += "Broken ${ModManifest.FILE_NAME}: ${it.readableMessage()}" }
                 .getOrNull()
         } else {
             problems += "No ${ModManifest.FILE_NAME}"
@@ -43,7 +44,7 @@ object ModScanner {
         val metadataFile = folder.resolve(ModMetadata.DIR_NAME).resolve(ModMetadata.FILE_NAME)
         val metadata = if (metadataFile.isRegularFile()) {
             runCatching { ModMetadata.read(metadataFile) }
-                .onFailure { problems += "Broken ${ModMetadata.DIR_NAME}/${ModMetadata.FILE_NAME}: ${it.message}" }
+                .onFailure { problems += "Broken ${ModMetadata.DIR_NAME}/${ModMetadata.FILE_NAME}: ${it.readableMessage()}" }
                 .getOrNull()
         } else {
             null

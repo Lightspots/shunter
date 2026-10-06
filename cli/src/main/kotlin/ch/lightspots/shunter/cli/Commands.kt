@@ -10,10 +10,12 @@ import ch.lightspots.shunter.core.install.InstalledFolder
 import ch.lightspots.shunter.core.mod.InstalledMod
 import ch.lightspots.shunter.core.mod.ModLocation
 import ch.lightspots.shunter.core.mod.ModScanner
+import ch.lightspots.shunter.core.net.DownloadProgress
 import com.github.ajalt.clikt.core.CliktCommand
 import com.github.ajalt.clikt.core.CliktError
 import com.github.ajalt.clikt.core.Context
 import com.github.ajalt.clikt.core.requireObject
+import com.github.ajalt.clikt.core.terminal
 import com.github.ajalt.clikt.parameters.arguments.argument
 import com.github.ajalt.clikt.parameters.arguments.multiple
 import com.github.ajalt.clikt.parameters.arguments.optional
@@ -21,6 +23,8 @@ import com.github.ajalt.clikt.parameters.options.flag
 import com.github.ajalt.clikt.parameters.options.multiple
 import com.github.ajalt.clikt.parameters.options.option
 import com.github.ajalt.clikt.parameters.types.choice
+import com.github.ajalt.mordant.rendering.TextStyles
+import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.runBlocking
 import java.nio.file.Path
 import java.time.Duration
@@ -28,6 +32,8 @@ import kotlin.io.path.Path
 import kotlin.io.path.exists
 import kotlin.io.path.isDirectory
 import kotlin.io.path.isRegularFile
+
+private val logger = KotlinLogging.logger {}
 
 /** Base for commands that use the [ModManager]; turns core exceptions into clean error messages. */
 abstract class ManagerCommand(name: String) : CliktCommand(name) {
@@ -39,18 +45,47 @@ abstract class ManagerCommand(name: String) : CliktCommand(name) {
     protected abstract suspend fun execute()
 
     final override fun run() {
+        logger.info { "Running $commandName" }
         try {
             runBlocking { execute() }
         } catch (e: CliktError) {
+            logger.info { "$commandName: ${e.message}" }
             throw e
         } catch (e: Exception) {
-            throw CliktError("Error: ${e.message ?: e}", cause = e)
+            logger.error(e) { "$commandName failed" }
+            throw CliktError(errorMessage(e, cli.logFile), cause = e)
         }
+    }
+
+    // Styles for the output; Mordant drops them when the output is not a terminal or NO_COLOR is set
+    protected fun warning(text: String) = terminal.theme.warning(text)
+    protected fun success(text: String) = terminal.theme.success(text)
+    protected fun muted(text: String) = terminal.theme.muted(text)
+    protected fun highlight(text: String) = terminal.theme.info(text)
+    protected fun bold(text: String) = TextStyles.bold.style(text)
+
+    /** Runs [block] with a factory for download progress bars and stops them afterwards, also on errors. */
+    protected suspend fun <T> withDownloadBars(block: suspend (newBar: (label: String) -> DownloadProgress) -> T): T {
+        val bars = mutableListOf<DownloadBar>()
+        try {
+            return block { label ->
+                // Downloads run one after another; two animated bars at once would overwrite each other's lines
+                bars.lastOrNull()?.let(::closeBar)
+                DownloadBar(terminal, label).also { bars += it }
+            }
+        } finally {
+            bars.forEach(::closeBar)
+        }
+    }
+
+    // A bar that fails to stop must neither keep the others running nor hide the block's exception
+    private fun closeBar(bar: DownloadBar) {
+        runCatching { bar.close() }.onFailure { logger.warn(it) { "Could not stop progress bar" } }
     }
 
     protected fun confirm(question: String, assumeYes: Boolean): Boolean {
         if (assumeYes) return true
-        print("$question [y/N] ")
+        echo("$question [y/N] ", trailingNewline = false)
         System.out.flush()
         return readlnOrNull()?.trim()?.lowercase() in setOf("y", "yes", "j", "ja")
     }
@@ -61,7 +96,7 @@ abstract class ManagerCommand(name: String) : CliktCommand(name) {
         return sources.map { source ->
             service.load(source, maxAge).also { result ->
                 result.error?.let {
-                    echo("Warning: could not refresh ${source.label} ($it), using copy from ${result.fetchedAt}", err = true)
+                    echo("${warning("Warning:")} could not refresh ${source.label} ($it), using copy from ${result.fetchedAt}", err = true)
                 }
             }
         }
@@ -77,22 +112,30 @@ abstract class ManagerCommand(name: String) : CliktCommand(name) {
         val all = manager.scan()
         val checked = focus ?: all
         checked.filter { it.problems.isNotEmpty() }.forEach { mod ->
-            echo("Problem in ${mod.location.label}/${mod.folderName}: ${mod.problems.joinToString("; ")}")
+            echo("${warning("Problem in ${mod.location.label}/${mod.folderName}:")} ${mod.problems.joinToString("; ")}")
         }
         val missing = manager.missingDependencies(checked, all)
         for (m in missing) {
             val name = m.displayName?.let { "$it (${m.dependency.modId})" } ?: m.dependency.modId
             val why = m.wrongRevision?.let { "installed revision $it is outside the required range" } ?: "not installed"
-            echo("Warning: ${m.mod.displayName(language)} requires $name: $why")
+            echo("${warning("Warning:")} ${m.mod.displayName(language)} requires $name: $why")
         }
         if (missing.isNotEmpty() && remote != null) {
             remote.dependencies.filter { it.remoteId != null }.forEach {
-                echo("  The download page lists: ${it.name ?: "?"}, install with: shunter install ${remote.source.id}:${it.remoteId}")
+                echo(
+                    "  The download page lists: ${it.name ?: "?"}, install with: ${highlight(
+                        "shunter install ${remote.source.id}:${it.remoteId}",
+                    )}",
+                )
             }
         }
         val checkedIds = checked.mapNotNull { it.modId }.toSet()
         manager.duplicateModIds(all).filterKeys { it in checkedIds }.forEach { (modId, mods) ->
-            echo("Warning: mod id '$modId' exists more than once: ${mods.joinToString { "${it.location.label}/${it.folderName}" }}")
+            echo(
+                "${warning("Warning:")} mod id '$modId' exists more than once: ${mods.joinToString {
+                    "${it.location.label}/${it.folderName}"
+                }}",
+            )
         }
     }
 
@@ -107,14 +150,14 @@ abstract class ManagerCommand(name: String) : CliktCommand(name) {
                 else -> "revision ${current.manifest?.revision ?: "?"} instead of ${record.revision ?: "?"}"
             }
             val hint = record.origin.ref?.takeIf { current != null }?.let { ", reinstall with: shunter install $it" }.orEmpty()
-            echo("${record.folderName}: changed outside shunter ($what), installed version unknown$hint")
+            echo("${record.folderName}: ${warning("changed outside shunter")} ($what), installed version unknown${muted(hint)}")
         }
     }
 
     protected fun printInstalled(folders: List<InstalledFolder>) {
         for (f in folders) {
-            echo("Installed ${f.folderName} (mod id ${f.modId}, revision ${f.revision ?: "?"})")
-            f.backup?.let { echo("  previous version saved to $it") }
+            echo("${success("Installed")} ${f.folderName} ${muted("(mod id ${f.modId}, revision ${f.revision ?: "?"})")}")
+            f.backup?.let { echo(muted("  previous version saved to $it")) }
         }
     }
 }
@@ -136,10 +179,13 @@ class PathsCommand : ManagerCommand("paths") {
 
     override suspend fun execute() {
         val paths = manager.gamePaths
-        fun show(label: String, path: Path?) =
-            echo("${label.padEnd(16)} ${path ?: "(not found)"}${if (path != null && !path.exists()) "  (does not exist yet)" else ""}")
+        fun show(label: String, path: Path?) = echo(
+            "${label.padEnd(
+                16,
+            )} ${path ?: muted("(not found)")}${if (path != null && !path.exists()) muted("  (does not exist yet)") else ""}",
+        )
 
-        echo("Game")
+        echo(bold("Game"))
         show("  local mods", paths.localMods)
         show("  staging area", paths.stagingArea)
         show("  mod.io mods", paths.modIoMods ?: cliContext.detector.modIoModsDir())
@@ -147,10 +193,11 @@ class PathsCommand : ManagerCommand("paths") {
         if (candidates.size > 1) {
             echo("  Steam accounts with TF3 data: ${candidates.joinToString { it.accountId }} (pick one with --steam-account)")
         }
-        echo("shunter")
+        echo(bold("shunter"))
         show("  data", manager.appDirs.data)
         show("  cache", manager.appDirs.cache)
         show("  backups", manager.appDirs.backups)
+        show("  log", cliContext.logFile ?: manager.appDirs.logs)
     }
 }
 
@@ -205,7 +252,7 @@ class SearchCommand : ManagerCommand("search") {
             }
             .sortedByDescending { it.updatedAt ?: 0 }
         for (feed in feeds.filter { it.mods.isEmpty() }) {
-            echo("${feed.source.label}: no Transport Fever 3 mods listed (yet).")
+            echo(muted("${feed.source.label}: no Transport Fever 3 mods listed (yet)."))
         }
         if (mods.isEmpty()) {
             echo("Nothing found.")
@@ -216,7 +263,7 @@ class SearchCommand : ManagerCommand("search") {
                 listOf("", "REF", "VERSION", "UPDATED", "SIZE", "NAME", "AUTHOR"),
                 mods.map { m ->
                     listOf(
-                        if (m.ref in installed) "*" else "",
+                        if (m.ref in installed) success("*") else "",
                         m.ref,
                         m.version ?: "",
                         date(m.updatedAt),
@@ -227,7 +274,7 @@ class SearchCommand : ManagerCommand("search") {
                 },
             ),
         )
-        if (installed.isNotEmpty()) echo("* = installed with shunter")
+        if (installed.isNotEmpty()) echo(muted("* = installed with shunter"))
     }
 }
 
@@ -241,8 +288,19 @@ class InstallCommand : ManagerCommand("install") {
 
     override suspend fun execute() {
         val archive = Path(target)
-        if (archive.isRegularFile()) installArchive(archive) else installRemote()
+        when {
+            archive.isRegularFile() -> installArchive(archive)
+
+            // Feed references never look like this, so a missing file is not reported as an unknown feed entry
+            looksLikePath(target) -> throw CliktError(
+                if (archive.exists()) "Not an archive file: $archive" else "Archive not found: $archive",
+            )
+
+            else -> installRemote()
+        }
     }
+
+    private fun looksLikePath(target: String) = '/' in target || ARCHIVE_EXTENSIONS.any { target.endsWith(it, ignoreCase = true) }
 
     private fun installArchive(archive: Path) {
         if (!confirm("Install $archive into ${manager.modsDir}?", yes)) return
@@ -257,24 +315,38 @@ class InstallCommand : ManagerCommand("install") {
         val remote = ModManager.findRemote(feeds, source, id)
             ?: throw CliktError("${source.label} has no Transport Fever 3 entry $id (try --refresh)")
 
-        echo("${remote.name}${remote.version?.let { " $it" } ?: ""}${remote.author?.let { " by $it" } ?: ""}")
-        remote.pageUrl?.let { echo("  $it") }
+        echo("${bold(remote.name)}${remote.version?.let { " $it" } ?: ""}${remote.author?.let { muted(" by $it") } ?: ""}")
+        remote.pageUrl?.let { echo(muted("  $it")) }
         remote.files.forEach {
-            echo("  file: ${it.fileName} (${humanSize(it.size)})${if (it.sha256 != null) ", checksum verified after download" else ""}")
+            echo(
+                muted(
+                    "  file: ${it.fileName} (${humanSize(it.size)})${if (it.sha256 != null) ", checksum verified after download" else ""}",
+                ),
+            )
         }
         if (remote.dependencies.isNotEmpty()) {
             val installed = installedRefs()
             remote.dependencies.forEach { dep ->
                 val ref = dep.remoteId?.let { "${source.id}:$it" }
-                val state = if (ref in installed) "installed" else "check: ${ref?.let { "shunter install $it" } ?: dep.pageUrl ?: "?"}"
+                val state = if (ref in
+                    installed
+                ) {
+                    success("installed")
+                } else {
+                    "check: ${highlight(ref?.let { "shunter install $it" } ?: dep.pageUrl ?: "?")}"
+                }
                 echo("  ${if (dep.required) "requires" else "optional"}: ${dep.name ?: "?"} ($state)")
             }
         }
         if (!confirm("Install into ${manager.modsDir}?", yes)) return
 
-        val installed = manager.installRemote(remote) { file -> ConsoleProgress(file.fileName) }
+        val installed = withDownloadBars { newBar -> manager.installRemote(remote) { file -> newBar(file.fileName) } }
         printInstalled(installed)
         reportProblems(installed.map { ModScanner.read(it.target, ModLocation.LOCAL) }, remote)
+    }
+
+    private companion object {
+        val ARCHIVE_EXTENSIONS = listOf(".zip", ".7z", ".rar")
     }
 }
 
@@ -287,7 +359,7 @@ class UpdatesCommand : ManagerCommand("updates") {
         val updates = manager.availableUpdates(loadFeeds(FeedSource.entries, refresh))
         val changed = manager.changedOutside()
         if (updates.isEmpty()) {
-            echo(if (changed.isEmpty()) "All mods installed with shunter are up to date." else "No updates found.")
+            echo(if (changed.isEmpty()) success("All mods installed with shunter are up to date.") else "No updates found.")
             printChangedOutside(changed)
             return
         }
@@ -298,13 +370,13 @@ class UpdatesCommand : ManagerCommand("updates") {
                     listOf(
                         u.record.folderName,
                         u.record.origin.version ?: date(u.record.origin.remoteChangedAt),
-                        u.remote.version ?: date(u.file.changedAt),
+                        success(u.remote.version ?: date(u.file.changedAt)),
                         u.remote.ref,
                     )
                 },
             ),
         )
-        echo("Install with: shunter update --all  (or: shunter update <folder>...)")
+        echo(muted("Install with: shunter update --all  (or: shunter update <folder>...)"))
         printChangedOutside(changed)
     }
 }
@@ -324,13 +396,13 @@ class UpdateCommand : ManagerCommand("update") {
         val unknown = folders - updates.map { it.record.folderName }.toSet()
         val changed = manager.changedOutside().filter { it.record.folderName in unknown }
         printChangedOutside(changed)
-        (unknown - changed.map { it.record.folderName }.toSet()).forEach { echo("No update for $it") }
+        (unknown - changed.map { it.record.folderName }.toSet()).forEach { echo(muted("No update for $it")) }
         if (updates.isEmpty()) return
 
         updates.forEach { echo("${it.record.folderName}: ${it.file.fileName} (${humanSize(it.file.size)})") }
         if (!confirm("Install ${updates.size} update(s)?", yes)) return
         for (u in updates) {
-            printInstalled(manager.installRemoteFile(u.remote, u.file, ConsoleProgress(u.file.fileName)))
+            printInstalled(withDownloadBars { newBar -> manager.installRemoteFile(u.remote, u.file, newBar(u.file.fileName)) })
         }
     }
 }
@@ -345,8 +417,8 @@ class RemoveCommand : ManagerCommand("remove") {
         val dir = manager.modsDir.resolve(folder)
         if (!dir.isDirectory()) throw CliktError("No mod folder '$folder' in ${manager.modsDir}")
         val mod = ModScanner.read(dir, ModLocation.LOCAL)
-        mod.manifest?.severityRemove?.let { echo("Note: the mod declares removal severity $it for existing savegames.") }
+        mod.manifest?.severityRemove?.let { echo("${warning("Note:")} the mod declares removal severity $it for existing savegames.") }
         if (!confirm("Remove ${mod.displayName(language)} ($folder)?", yes)) return
-        echo("Moved to ${manager.uninstall(folder)}")
+        echo("${success("Removed")} $folder${muted(", moved to ${manager.uninstall(folder)}")}")
     }
 }
