@@ -18,6 +18,9 @@ data class AppDirs(val data: Path, val cache: Path, val config: Path, val state:
     /** The mod.io access token, readable only by the user. */
     val modIoLoginFile: Path get() = config.resolve("modio-login.json")
 
+    /** The modwerkstatt.com session token, readable only by the user. */
+    val modwerkstattLoginFile: Path get() = config.resolve("modwerkstatt-login.json")
+
     val downloads: Path get() = cache.resolve("downloads")
     val feeds: Path get() = cache.resolve("feeds")
 

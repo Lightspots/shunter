@@ -64,6 +64,18 @@ class HttpDownloaderTest {
             exchange.sendResponseHeaders(if (ok) 200 else 401, body.size.toLong())
             exchange.responseBody.use { it.write(body) }
         }
+        server.createContext("/expired") { exchange ->
+            // Like modwerkstatt.com for a refused signed link: off to the home page
+            exchange.responseHeaders.add("Location", "/home")
+            exchange.sendResponseHeaders(302, -1)
+            exchange.close()
+        }
+        server.createContext("/home") { exchange ->
+            val body = "<html>Welcome</html>".toByteArray()
+            exchange.responseHeaders.add("Content-Type", "text/html; charset=UTF-8")
+            exchange.sendResponseHeaders(200, body.size.toLong())
+            exchange.responseBody.use { it.write(body) }
+        }
         server.createContext("/feed") { exchange ->
             val body = "{\"ok\": \"äö\"}".toByteArray()
             exchange.sendResponseHeaders(200, body.size.toLong())
@@ -118,6 +130,26 @@ class HttpDownloaderTest {
     fun `http errors fail`() = runBlocking {
         val e = assertThrows<DownloadException> { http.download("$baseUrl/missing", tmp.resolve("x")) }
         assertTrue(e.message!!.contains("404"))
+    }
+
+    @Test
+    fun `a web page instead of a file fails, and errors do not show link signatures`() = runBlocking {
+        val dest = tmp.resolve("x.zip")
+        val e = assertThrows<DownloadException> { http.download("$baseUrl/expired?exp=1&sig=s3cret", dest) }
+        assertTrue("web page" in e.message!!)
+        assertFalse("s3cret" in e.message!!)
+        assertFalse(dest.exists())
+
+        val missing = assertThrows<HttpStatusException> { http.download("$baseUrl/missing?exp=1&sig=s3cret", dest) }
+        assertEquals("$baseUrl/missing?exp=1&sig=***", missing.url)
+        assertFalse("s3cret" in missing.message!!)
+    }
+
+    @Test
+    fun `redacts credentials in urls`() {
+        assertEquals("https://a.example/f.zip", redactUrl("https://a.example/f.zip"))
+        assertEquals("https://a.example/f.zip?exp=17&sig=***", redactUrl("https://a.example/f.zip?exp=17&sig=abc"))
+        assertEquals("https://a.example/?q=x&API_KEY=***&flag#top", redactUrl("https://a.example/?q=x&API_KEY=k&flag#top"))
     }
 
     @Test

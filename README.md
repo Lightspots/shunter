@@ -18,6 +18,7 @@ shunter paths                 # which folders are used
 shunter list                  # installed mods (local, staging, mod.io)
 shunter search [text]         # mods available on the sites
 shunter install tfnet:8126    # install from transportfever.net (or just: 8126)
+shunter install mw:9343       # install from modwerkstatt.com
 shunter install ./mod.7z      # install a downloaded archive
 shunter updates               # newer versions of mods installed with Shunter
 shunter update --all
@@ -26,6 +27,9 @@ shunter modio login           # sign in to mod.io (see below)
 shunter modio search [text]   # mods on mod.io
 shunter modio subscribe <id>  # subscribe (with dependencies); the game downloads it
 shunter modio unsubscribe <id>
+shunter modwerkstatt login    # sign in to modwerkstatt.com (alias: mw, see below)
+shunter modwerkstatt status
+shunter modwerkstatt logout
 ```
 
 Try things out without touching the game with `--mods-dir /some/test/folder`.
@@ -43,6 +47,14 @@ Signing in needs a personal access token with read and write access: create one 
 `~/.config/shunter/modio-login.json`, readable only by you. `shunter modio logout` deletes it there;
 revoke it on mod.io to make it invalid.
 
+### modwerkstatt.com
+
+The modwerkstatt.com mod list and downloads work without an account. Signed in, Shunter fetches them
+with your account, as the ModWerkstatt ModManager does, and also sees mods that are not public yet.
+`shunter modwerkstatt login` asks for the email address of your account; modwerkstatt.com mails you
+a code, which you enter. The session is stored in `~/.config/shunter/modwerkstatt-login.json`,
+readable only by you, and is sent only to modwerkstatt.com. `shunter modwerkstatt logout` ends the session there and deletes the file.
+
 What Shunter did, and the details of errors, is logged to `~/.local/state/shunter/logs/cli.log`
 (attach it to bug reports). Run with `SHUNTER_LOG_LEVEL=debug` for more detail.
 
@@ -56,13 +68,15 @@ What Shunter did, and the details of errors, is logged to `~/.local/state/shunte
 | Shunter data: install records, backups | `~/.local/share/shunter`                                        |
 | Shunter cache: downloads, mod lists    | `~/.cache/shunter`                                              |
 | mod.io access token                    | `~/.config/shunter/modio-login.json`                            |
+| modwerkstatt.com sign-in               | `~/.config/shunter/modwerkstatt-login.json`                     |
 | Shunter logs                           | `~/.local/state/shunter/logs`                                   |
 
 ## Safety
 
 Mods are downloaded from the internet and unpacked into your game folders, so Shunter is careful:
 
-- Downloads are checked against the size and SHA-256 checksum the site publishes.
+- Downloads are checked against the size and SHA-256 checksum the site publishes (modwerkstatt.com
+  publishes only the size).
 - Archive entries that would land outside the target folder (`../`, absolute paths) or are
   symlinks are refused.
 - Installing over an existing mod moves the old version to the backups first (the last two are
@@ -74,7 +88,7 @@ Mods are downloaded from the internet and unpacked into your game folders, so Sh
 | Site               | Feed                          | Notes                                                |
 |--------------------|-------------------------------|------------------------------------------------------|
 | transportfever.net | `filebase/repos/tpf3-v3.json` | `.zip` and `.7z`, with checksums and dependencies    |
-| modwerkstatt.com   | `tpfmm/`                      | lists only TPF2 mods so far                          |
+| modwerkstatt.com   | `json/mwmanager`              | `.zip`, size, no checksum; sign-in shows more mods  |
 | mod.io             | REST API                      | Search and subscribe; the game downloads the mods    |
 
 ## Development

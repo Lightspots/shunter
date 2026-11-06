@@ -3,7 +3,7 @@ package ch.lightspots.shunter.cli
 import ch.lightspots.shunter.core.ChangedOutside
 import ch.lightspots.shunter.core.ModManager
 import ch.lightspots.shunter.core.feed.FeedResult
-import ch.lightspots.shunter.core.feed.FeedService
+import ch.lightspots.shunter.core.feed.FeedSignInException
 import ch.lightspots.shunter.core.feed.FeedSource
 import ch.lightspots.shunter.core.feed.RemoteMod
 import ch.lightspots.shunter.core.install.InstalledFolder
@@ -95,16 +95,23 @@ abstract class ManagerCommand(name: String) : CliktCommand(name) {
     }
 
     protected suspend fun loadFeeds(sources: Collection<FeedSource>, refresh: Boolean): List<FeedResult> {
-        val service = FeedService(manager.appDirs, cli.http)
         val maxAge = if (refresh) Duration.ZERO else Duration.ofHours(1)
         return sources.map { source ->
-            service.load(source, maxAge).also { result ->
-                result.error?.let {
-                    echo("${warning("Warning:")} could not refresh ${source.label} ($it), using copy from ${result.fetchedAt}", err = true)
-                }
+            val result = try {
+                manager.feeds.load(source, maxAge)
+            } catch (e: FeedSignInException) {
+                throw CliktError("${e.message}\n${signInHint(e.source)}", cause = e)
             }
+            result.error?.let {
+                echo("${warning("Warning:")} could not refresh ${source.label} ($it), using copy from ${result.fetchedAt}", err = true)
+                if (result.signInRefused) echo("  ${signInHint(source)}", err = true)
+            }
+            result
         }
     }
+
+    private fun signInHint(source: FeedSource) =
+        if (source == FeedSource.MODWERKSTATT) MODWERKSTATT_RELOGIN_HINT else "Sign in to ${source.label} again."
 
     /** Feed references (`tfnet:8126`) of mods installed with shunter. */
     protected fun installedRefs(): Set<String> = manager.registry.records(manager.modsDir).values

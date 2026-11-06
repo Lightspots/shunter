@@ -71,48 +71,43 @@ object TfnetFeedParser {
 }
 
 /**
- * modwerkstatt.com `tpfmm` repository, the format eis_os' CommonAPI2 reads for TPF2.
- * One entry can contain several files, each being its own mod folder.
+ * modwerkstatt.com `json/mwmanager`, the list the ModWerkstatt ModManager reads: an array of TF3 mods
+ * with one archive each. `revision` is the revision in the mod's `mod.json`. There are no checksums,
+ * change dates or authors; required mods point to other entries by `id`.
  */
 object ModwerkstattFeedParser {
-    /** As of 2026-10 the feed only lists "tpf2"; TF3 mods are expected to appear as "tpf3". */
-    const val TF3_GAME = "tpf3"
-
-    fun parse(text: String, game: String = TF3_GAME): List<RemoteMod> {
-        val json = parseJsonText(text)
-        if (json["repo_info"].obj() == null || json["mods"] !is JsonArray) {
-            throw FeedFormatException("Not a modwerkstatt repository")
+    fun parse(text: String): List<RemoteMod> {
+        val json = parseJsonText(text) as? JsonArray ?: throw FeedFormatException("Not a modwerkstatt mod list")
+        val titles = json.mapNotNull { entry ->
+            entry["id"].long()?.let { it.toString() to (entry["title"].str() ?: entry["modId"].str()) }
         }
-        val entryBase = json["mod_base_url"].str().orEmpty()
-        val fileBase = json["file_base_url"].str().orEmpty()
-        return json["mods"].arr()
-            .filter { it["game"].str().equals(game, ignoreCase = true) }
-            .mapNotNull { parseEntry(it, entryBase, fileBase) }
+            .toMap()
+        return json.mapNotNull { parseEntry(it, titles) }
     }
 
-    private fun parseEntry(json: JsonElement, entryBase: String, fileBase: String): RemoteMod? {
+    private fun parseEntry(json: JsonElement, titles: Map<String, String?>): RemoteMod? {
         val id = json["id"].long()?.toString() ?: return null
+        val revision = json["revision"].str()?.trim()?.takeIf { it.isNotEmpty() }
+        val file = json["download_url"].str()?.takeIf { it.isNotBlank() }?.let { url ->
+            RemoteFile(
+                // A new revision is a new file, which is how updates are found
+                id = revision?.let { "$id-r$it" } ?: id,
+                fileName = url.substringBefore('?').substringAfterLast('/').ifEmpty { "$id.zip" },
+                downloadUrl = url,
+                size = json["file_size"].long()?.takeIf { it > 0 },
+            )
+        }
         return RemoteMod(
             source = FeedSource.MODWERKSTATT,
             id = id,
-            name = json["name"].str() ?: "Entry $id",
-            author = json["author"].str(),
-            version = json["version"].str(),
-            pageUrl = json["url"].str()?.let { resolve(entryBase, it) },
-            updatedAt = json["timechanged"].long(),
-            files = json["files"].arr().mapNotNull { file ->
-                val url = file["url"].str() ?: return@mapNotNull null
-                RemoteFile(
-                    id = file["fileid"].str() ?: url,
-                    fileName = file["filename"].str() ?: url.substringAfterLast('/'),
-                    downloadUrl = resolve(fileBase, url),
-                    changedAt = file["timechanged"].long(),
-                    folderName = file["foldername"].str(),
-                )
+            name = json["title"].str() ?: json["modId"].str() ?: "Entry $id",
+            version = revision?.let { "rev $it" },
+            files = listOfNotNull(file),
+            dependencies = json["required_mods"].arr().map { dep ->
+                val depId = dep["id"].long()?.toString()?.takeIf { it in titles }
+                RemoteDependency(name = depId?.let { titles[it] } ?: dep["modId"].str(), remoteId = depId, required = true)
             },
-            tags = json["tags"].arr().mapNotNull { it.str() },
+            tags = json["categories"].arr().mapNotNull { it["name"].str() },
         )
     }
-
-    private fun resolve(base: String, path: String) = if (path.startsWith("http://") || path.startsWith("https://")) path else base + path
 }
