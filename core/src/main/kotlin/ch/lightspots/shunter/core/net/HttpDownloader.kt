@@ -18,6 +18,7 @@ import io.ktor.http.HttpMethod
 import io.ktor.http.Parameters
 import io.ktor.http.content.TextContent
 import io.ktor.http.contentLength
+import io.ktor.http.contentType
 import io.ktor.http.formUrlEncode
 import io.ktor.http.isSuccess
 import io.ktor.utils.io.readAvailable
@@ -26,6 +27,7 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import java.io.IOException
+import java.net.URLDecoder
 import java.nio.file.Path
 import java.nio.file.StandardCopyOption
 import java.security.MessageDigest
@@ -41,8 +43,48 @@ private val logger = KotlinLogging.logger {}
 
 open class DownloadException(message: String, cause: Throwable? = null) : IOException(message, cause)
 
+/** Query parameters whose values are credentials, such as the signature of a signed download link. */
+private val SECRET_PARAMS = setOf("sig", "signature", "token", "access_token", "api_key", "key", "x-amz-signature")
+
+/**
+ * [url] with the values of credential query parameters replaced by `***`, for logs and error messages.
+ * modwerkstatt.com signs download links of mods that are not public yet (`?exp=…&sig=…`); the link is a credential until it expires.
+ */
+fun redactUrl(url: String): String {
+    val start = url.indexOf('?').takeIf { it >= 0 } ?: return url
+    val end = url.indexOf('#', start).takeIf { it >= 0 } ?: url.length
+    val query = url.substring(start + 1, end).split('&').joinToString("&") { param ->
+        val name = param.substringBefore('=')
+        if ('=' in param && isSecretParam(name)) "$name=***" else param
+    }
+    return url.substring(0, start + 1) + query + url.substring(end)
+}
+
+/** Query parameters in free text, such as a URL inside an exception message, however the URL around them is spelled. */
+private val QUERY_PARAM = Regex("""([?&])([^=&#?\s]+)=([^&#\s]*)""")
+
+/**
+ * [text] with the values of credential query parameters replaced by `***` wherever a URL appears in it.
+ * For messages of other libraries, which may spell the URL differently than it was requested (Ktor
+ * lowercases the scheme, for example), so replacing the exact URL is not enough.
+ */
+fun redactUrls(text: String): String = QUERY_PARAM.replace(text) { match ->
+    val (separator, name, _) = match.destructured
+    if (isSecretParam(name)) "$separator$name=***" else match.value
+}
+
+/** Compares the decoded name, so `%73ig` counts as `sig`. */
+private fun isSecretParam(name: String): Boolean {
+    val decoded = runCatching { URLDecoder.decode(name, Charsets.UTF_8) }.getOrDefault(name)
+    return decoded.lowercase() in SECRET_PARAMS
+}
+
 /** The server answered with an error status. [body] holds the start of the response, which APIs use to explain the error. */
-class HttpStatusException(val status: Int, val url: String, val body: String? = null) : DownloadException("HTTP $status for $url")
+class HttpStatusException(val status: Int, url: String, val body: String? = null) :
+    DownloadException("HTTP $status for ${redactUrl(url)}") {
+    /** The requested URL, without credentials ([redactUrl]). */
+    val url: String = redactUrl(url)
+}
 
 /** A successful response read as text. */
 data class HttpText(val status: Int, val text: String)
@@ -64,16 +106,18 @@ class HttpDownloader(private val client: HttpClient = defaultClient()) : AutoClo
     /**
      * Sends a request and reads the answer as text, for APIs. [form] is sent as
      * `application/x-www-form-urlencoded` body, without a charset parameter: mod.io refuses the
-     * `; charset=UTF-8` Ktor's `FormDataContent` adds (HTTP 415). [headers] are never logged. An error status throws
-     * [HttpStatusException] with the start of the body.
+     * `; charset=UTF-8` Ktor's `FormDataContent` adds (HTTP 415). [json] is sent as `application/json` body.
+     * [headers] and bodies are never logged. An error status throws [HttpStatusException] with the start of the body.
      */
     suspend fun request(
         method: HttpMethod,
         url: String,
         headers: Map<String, String> = emptyMap(),
         form: Map<String, String>? = null,
+        json: String? = null,
     ): HttpText {
-        logger.debug { "${method.value} $url" }
+        require(form == null || json == null) { "Either a form or a JSON body, not both" }
+        logger.debug { "${method.value} ${redactUrl(url)}" }
         val response = client.request(url) {
             this.method = method
             headers.forEach { (name, value) -> header(name, value) }
@@ -81,6 +125,7 @@ class HttpDownloader(private val client: HttpClient = defaultClient()) : AutoClo
                 val encoded = Parameters.build { fields.forEach { (name, value) -> append(name, value) } }.formUrlEncode()
                 setBody(TextContent(encoded, ContentType.Application.FormUrlEncoded))
             }
+            json?.let { setBody(TextContent(it, ContentType.Application.Json)) }
         }
         val text = response.bodyAsText(Charsets.UTF_8)
         if (!response.status.isSuccess()) throw HttpStatusException(response.status.value, url, text.take(MAX_ERROR_BODY))
@@ -90,13 +135,16 @@ class HttpDownloader(private val client: HttpClient = defaultClient()) : AutoClo
     /**
      * Downloads [url] to [dest]. Size and SHA-256 are verified when given; a mismatching file is
      * deleted and the call fails. An existing [dest] with the expected checksum is reused.
-     * Returns the SHA-256 of the file.
+     * Returns the SHA-256 of the file. [headers] are never logged; Ktor drops `Authorization` on a
+     * redirect to another host. A web page instead of a file fails the download: sites send one for
+     * an expired or refused link, often by redirecting to their home page.
      */
     suspend fun download(
         url: String,
         dest: Path,
         expectedSize: Long? = null,
         expectedSha256: String? = null,
+        headers: Map<String, String> = emptyMap(),
         progress: DownloadProgress? = null,
     ): String = withContext(Dispatchers.IO) {
         if (expectedSha256 != null && dest.exists() && sha256(dest).equals(expectedSha256, ignoreCase = true)) {
@@ -105,10 +153,14 @@ class HttpDownloader(private val client: HttpClient = defaultClient()) : AutoClo
         }
         dest.parent.createDirectories()
         val part = dest.resolveSibling("${dest.fileName}.part")
-        logger.info { "Downloading $url to $dest" }
+        val shown = redactUrl(url)
+        logger.info { "Downloading $shown to $dest" }
         try {
-            client.prepareGet(url).execute { response ->
+            client.prepareGet(url) { headers.forEach { (name, value) -> header(name, value) } }.execute { response ->
                 checkStatus(url, response)
+                if (response.contentType()?.match(ContentType.Text.Html) == true) {
+                    throw DownloadException("$shown sent a web page instead of a file; the link may have expired or need a sign-in")
+                }
                 val total = response.contentLength() ?: expectedSize
                 val body = response.bodyAsChannel()
                 val digest = MessageDigest.getInstance("SHA-256")
@@ -127,16 +179,22 @@ class HttpDownloader(private val client: HttpClient = defaultClient()) : AutoClo
                     }
                 }
                 if (expectedSize != null && downloaded != expectedSize) {
-                    throw DownloadException("Download incomplete: expected $expectedSize bytes but got $downloaded ($url)")
+                    throw DownloadException("Download incomplete: expected $expectedSize bytes but got $downloaded ($shown)")
                 }
                 val actual = HexFormat.of().formatHex(digest.digest())
                 if (expectedSha256 != null && !actual.equals(expectedSha256, ignoreCase = true)) {
-                    throw DownloadException("Checksum mismatch for $url: expected $expectedSha256 but got $actual")
+                    throw DownloadException("Checksum mismatch for $shown: expected $expectedSha256 but got $actual")
                 }
                 part.moveTo(dest, StandardCopyOption.REPLACE_EXISTING)
                 logger.info { "Downloaded ${dest.fileName}: $downloaded bytes, sha256 $actual" }
                 actual
             }
+        } catch (e: IOException) {
+            // Ktor's exceptions, timeouts among them, name the URL with its credentials
+            val message = e.message.orEmpty()
+            val redacted = redactUrls(message.replace(url, shown))
+            if (e is DownloadException || redacted == message) throw e
+            throw DownloadException(redacted).apply { stackTrace = e.stackTrace }
         } finally {
             part.deleteIfExists()
         }

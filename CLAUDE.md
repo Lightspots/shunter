@@ -18,8 +18,10 @@ See README.md for usage.
     downloads subscriptions made by shunter on its next start (verified). Next: email
     sign-in (`/oauth/emailrequest` + `/oauth/emailexchange`, needs an API key in the POST body),
     token in the Secret Service instead of a file.
-  - modwerkstatt's `/tpfmm/` feed works but only lists `game: "tpf2"` so far; its TF3 mods are
-    supporter-only for now.
+  - modwerkstatt.com: sign-in and installing a mod that is not public yet verified against the real
+    server. Signed in, the feed also lists those mods (107 instead of 36 as of 2026-11), some of them
+    without a file on the server yet (404). What a membership (API error
+    `membership_required`) changes on top is not known.
 
 ## Mod folders (native Linux)
 
@@ -48,7 +50,17 @@ suffix. mod.io packages have only `mod.json` plus content at the top level (no `
   About half the archives are `.7z`. `detected_mods` is always empty, so the mod folder is
   found by extracting. Version is in `custom_fields` with label "Aktuelle Version".
   Dependencies point to other entries (`entry_id`) and carry an `install` block.
-- modwerkstatt.com: `https://modwerkstatt.com/tpfmm/`, `mods[].files[]` with `foldername`.
+- modwerkstatt.com: `https://modwerkstatt.com/json/mwmanager`, the list the ModWerkstatt ModManager
+  (a Godot app) reads. A JSON array: `id`, `modId`, `title`, `download_url` (`.zip`, mod folder at the
+  top), `file_size`, `revision` (string, = `mod.json` revision), `updates` (`{"<rev>": text}`, `[]` when
+  empty), `required_mods` (`[{id, modId}]`). No checksum, author or dates. The old `/tpfmm/` lists only
+  TPF2. Sign-in at `https://modwerkstatt.com/api`: `POST /login/request {email}` mails a code,
+  `POST /login/confirm {email, code, device_name}` returns `{token, expires_at, user{name, membership_until}}`,
+  then `Authorization: Bearer` (`GET /me`, `POST /logout`). With the token the feed also lists
+  mods that are not public yet, with signed download links (`?exp=<epoch, ~6 h>&sig=<hex>`) that work
+  without the token. A bad signature redirects to the home page (HTML); a good one can still 404 when
+  the file is missing on the server (seen for unreleased mods). `redactUrl` hides `sig` in logs and errors. Errors are `{"error": "<code>"}`. The token is
+  stored in `AppDirs.modwerkstattLoginFile` (mode 600) and sent only to `https://*modwerkstatt.com`.
 - mod.io: REST API v1 at `https://g-10640.modapi.io/v1` (`api.mod.io` is retired). Authenticated
   only with an OAuth access token (`Authorization: Bearer`), never the API key, which mod.io only
   takes as `?api_key=` query parameter. The token is a personal access token from mod.io/me/access,

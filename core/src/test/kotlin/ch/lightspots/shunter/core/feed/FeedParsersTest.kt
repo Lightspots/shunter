@@ -3,6 +3,7 @@ package ch.lightspots.shunter.core.feed
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class FeedParsersTest {
@@ -83,39 +84,44 @@ class FeedParsersTest {
     @Test
     fun `rejects other formats`() {
         assertThrows<FeedFormatException> { TfnetFeedParser.parse("""{ "repo": { "format": "CommonAPIRepo" }, "files": [] }""") }
-        assertThrows<FeedFormatException> { ModwerkstattFeedParser.parse("""{ "files": [] }""") }
+        assertThrows<FeedFormatException> { ModwerkstattFeedParser.parse("""{ "repo_info": {}, "mods": [] }""") }
     }
 
     @Test
-    fun `parses modwerkstatt entries for the requested game only`() {
+    fun `parses modwerkstatt entries`() {
         val text = """
-            {
-                "repo_info": { "name": "ModWerkstatt", "changed": 1787073362 },
-                "mod_base_url": "https://modwerkstatt.com/downloads/",
-                "file_base_url": "https://modwerkstatt.com/download/",
-                "mods": [
-                    { "id": 5204, "name": "MAN SL 202", "game": "tpf2", "version": "1.0", "url": "man-sl-202",
-                      "files": [ { "fileid": "5204", "filename": "a.zip", "url": "a.zip", "foldername": "a_1" } ] },
-                    { "id": 9001, "name": "ICE 4", "author": "ModWerkstatt", "game": "tpf3", "version": 2,
-                      "url": "tpf3/ice-4", "timechanged": 1790000000, "tags": [ "TPF3 Züge" ],
-                      "files": [
-                        { "fileid": "9001", "filename": "mw_ice_4.zip", "url": "mw_ice_4.zip", "timechanged": 1790000000, "foldername": "mw_ice_4" },
-                        { "fileid": "9002", "filename": "mw_ice_4_fake.zip", "url": "https://cdn.example/fake.zip", "foldername": "mw_ice_4_fake" }
-                      ] }
-                ]
-            }
+            [
+                { "id": 9001, "modId": "mw_ice_4", "slug": "ice-4", "title": "ICE 4",
+                  "image_url": "https://modwerkstatt.com/img/models/tpf3/ice-4/preview.webp",
+                  "download_url": "https://modwerkstatt.com/download/tpf3/mw_ice_4.zip", "file_size": 1234,
+                  "revision": "2", "updates": { "2": "Fixed the driver" },
+                  "required_mods": [ { "id": 9002, "modId": "mw_basis" }, { "id": 9999, "modId": "mw_unlisted" } ],
+                  "categories": [ { "id": 1, "name": "Trains" } ] },
+                { "id": 9002, "modId": "mw_basis", "title": "Basis Mod", "download_url": "https://modwerkstatt.com/download/tpf3/mw_basis.zip",
+                  "file_size": 0, "revision": 1, "updates": [], "required_mods": [] },
+                { "id": 9003, "modId": "mw_soon", "title": "Not downloadable yet", "download_url": "", "revision": "1" },
+                { "modId": "no_id" }
+            ]
         """.trimIndent()
 
-        val mod = ModwerkstattFeedParser.parse(text).single()
+        val mods = ModwerkstattFeedParser.parse(text)
 
-        assertEquals("modwerkstatt:9001", mod.ref)
-        assertEquals("2", mod.version)
-        assertEquals("https://modwerkstatt.com/downloads/tpf3/ice-4", mod.pageUrl)
+        assertEquals(listOf("modwerkstatt:9001", "modwerkstatt:9002", "modwerkstatt:9003"), mods.map { it.ref })
+        val ice = mods[0]
+        assertEquals("ICE 4", ice.name)
+        assertEquals("rev 2", ice.version)
+        assertEquals(listOf("Trains"), ice.tags)
+        val file = ice.files.single()
+        assertEquals("9001-r2", file.id)
+        assertEquals("mw_ice_4.zip", file.fileName)
+        assertEquals("https://modwerkstatt.com/download/tpf3/mw_ice_4.zip", file.downloadUrl)
+        assertEquals(1234, file.size)
         assertEquals(
-            listOf("https://modwerkstatt.com/download/mw_ice_4.zip", "https://cdn.example/fake.zip"),
-            mod.files.map { it.downloadUrl },
+            listOf(RemoteDependency("Basis Mod", "9002", true), RemoteDependency("mw_unlisted", null, true)),
+            ice.dependencies,
         )
-        assertEquals(listOf("mw_ice_4", "mw_ice_4_fake"), mod.files.map { it.folderName })
-        assertEquals("a_1", ModwerkstattFeedParser.parse(text, game = "tpf2").single().files.single().folderName)
+        assertEquals("rev 1", mods[1].version, "a number works too")
+        assertNull(mods[1].files.single().size, "0 means unknown")
+        assertTrue(mods[2].files.isEmpty())
     }
 }

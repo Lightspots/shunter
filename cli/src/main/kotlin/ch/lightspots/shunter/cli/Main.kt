@@ -51,6 +51,8 @@ class Shunter(private val logFile: Path? = null) : CliktCommand(name = "shunter"
         versionOption(BuildInfo.VERSION)
     }
 
+    override fun aliases() = mapOf("mw" to listOf("modwerkstatt"))
+
     override fun run() {
         // Subcommands get it via requireObject; one set beforehand (e.g. by a test) is kept
         currentContext.findOrSetObject {
@@ -87,6 +89,7 @@ fun main(args: Array<String>) {
                 UpdateCommand(),
                 RemoveCommand(),
                 ModIoCommand(),
+                ModwerkstattCommand(),
             )
             .main(args)
     } catch (e: Exception) {

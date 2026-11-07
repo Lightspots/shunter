@@ -1,6 +1,7 @@
 package ch.lightspots.shunter.core
 
 import ch.lightspots.shunter.core.feed.FeedResult
+import ch.lightspots.shunter.core.feed.FeedService
 import ch.lightspots.shunter.core.feed.FeedSource
 import ch.lightspots.shunter.core.feed.RemoteFile
 import ch.lightspots.shunter.core.feed.RemoteMod
@@ -18,11 +19,16 @@ import ch.lightspots.shunter.core.modio.ModIoLogin
 import ch.lightspots.shunter.core.modio.ModIoLoginStore
 import ch.lightspots.shunter.core.modio.ModIoSubscriptions
 import ch.lightspots.shunter.core.modio.ModIoUser
+import ch.lightspots.shunter.core.modwerkstatt.ModwerkstattAuthException
+import ch.lightspots.shunter.core.modwerkstatt.ModwerkstattClient
+import ch.lightspots.shunter.core.modwerkstatt.ModwerkstattLogin
+import ch.lightspots.shunter.core.modwerkstatt.ModwerkstattLoginStore
 import ch.lightspots.shunter.core.net.DownloadProgress
 import ch.lightspots.shunter.core.net.HttpDownloader
 import ch.lightspots.shunter.core.paths.AppDirs
 import ch.lightspots.shunter.core.paths.GamePaths
 import io.github.oshai.kotlinlogging.KotlinLogging
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.nio.file.Path
@@ -52,6 +58,20 @@ data class MissingDependency(
     val wrongRevision: Int? = null,
 )
 
+/** Outcome of [ModManager.modwerkstattLogout]. */
+enum class ModwerkstattLogoutResult {
+    NOT_SIGNED_IN,
+
+    /** modwerkstatt.com ended the session (or it had expired), and the token is forgotten. */
+    SIGNED_OUT,
+
+    /**
+     * The token is forgotten, but modwerkstatt.com could not be told, so the session may stay valid there
+     * until it expires. Signing out on the website ends it.
+     */
+    FORGOTTEN_LOCALLY,
+}
+
 /**
  * Entry point for frontends (CLI, UI): everything they need, without knowing the parts.
  * Suspend functions move their blocking work to [Dispatchers.IO]; the others block the caller.
@@ -64,7 +84,14 @@ class ModManager(
     private val installer: ModInstaller = ModInstaller(appDirs, registry),
     val modIoLogins: ModIoLoginStore = ModIoLoginStore(appDirs.modIoLoginFile),
     private val modIoApiUrl: String = ModIoClient.DEFAULT_API_URL,
+    val modwerkstattLogins: ModwerkstattLoginStore = ModwerkstattLoginStore(appDirs.modwerkstattLoginFile),
+    private val modwerkstattApiUrl: String = ModwerkstattClient.DEFAULT_API_URL,
+    /** Which URLs get the modwerkstatt.com session token; only modwerkstatt.com over HTTPS, tests widen it. */
+    private val sendsModwerkstattToken: (String) -> Boolean = ModwerkstattClient::isModwerkstattUrl,
 ) {
+
+    /** The mod lists of the sites, with the modwerkstatt.com sign-in when there is one. */
+    val feeds: FeedService by lazy { FeedService(appDirs, http, headers = ::feedHeaders) }
 
     init {
         logger.info {
@@ -94,7 +121,8 @@ class ModManager(
     suspend fun installRemoteFile(mod: RemoteMod, file: RemoteFile, progress: DownloadProgress? = null): List<InstalledFolder> =
         withContext(Dispatchers.IO) {
             val archive = appDirs.ensureCreated().downloads.resolve(downloadFileName(mod, file))
-            val sha256 = http.download(file.downloadUrl, archive, file.size, file.sha256, progress)
+            val headers = if (mod.source == FeedSource.MODWERKSTATT) modwerkstattHeaders(file.downloadUrl) else emptyMap()
+            val sha256 = http.download(file.downloadUrl, archive, file.size, file.sha256, headers, progress)
             val origin = InstallOrigin(
                 source = mod.source,
                 remoteId = mod.id,
@@ -123,6 +151,84 @@ class ModManager(
     /** Forgets the stored token. Returns false when there was none. */
     fun modIoLogout(): Boolean = modIoLogins.clear()
 
+    /** The stored modwerkstatt.com sign-in, null when there is none or it has expired. */
+    fun modwerkstattLogin(): ModwerkstattLogin? = modwerkstattLogins.load()?.takeUnless { it.isExpired() }
+
+    /** Asks modwerkstatt.com to mail a sign-in code to [email]; [modwerkstattConfirm] completes the sign-in. */
+    suspend fun modwerkstattRequestCode(email: String) {
+        require(email.isNotBlank()) { "The email address is empty" }
+        modwerkstattClient().requestCode(email)
+    }
+
+    /** Exchanges the mailed [code] for a session token and stores it. Nothing is stored when modwerkstatt.com refuses the code. */
+    suspend fun modwerkstattConfirm(email: String, code: String, deviceName: String = DEVICE_NAME): ModwerkstattLogin {
+        require(code.isNotBlank()) { "The code is empty" }
+        val login = modwerkstattClient().confirmCode(email, code, deviceName)
+        withContext(Dispatchers.IO) {
+            modwerkstattLogins.save(login)
+            // Signed in, the list may hold more mods
+            feeds.clearCache(FeedSource.MODWERKSTATT)
+        }
+        return login
+    }
+
+    /**
+     * The sign-in with the account details modwerkstatt.com has now, null when not signed in. A sign-in
+     * modwerkstatt.com no longer accepts is forgotten and [ModwerkstattAuthException] thrown.
+     */
+    suspend fun modwerkstattAccount(): ModwerkstattLogin? {
+        val stored = withContext(Dispatchers.IO) { modwerkstattLogins.load() } ?: return null
+        val current = try {
+            if (stored.isExpired()) throw ModwerkstattAuthException("The modwerkstatt.com sign-in has expired.")
+            modwerkstattClient().me(stored)
+        } catch (e: ModwerkstattAuthException) {
+            withContext(Dispatchers.IO) { forgetModwerkstattLogin() }
+            throw e
+        }
+        if (current != stored) withContext(Dispatchers.IO) { modwerkstattLogins.save(current) }
+        return current
+    }
+
+    /**
+     * Signs out on modwerkstatt.com, so the token becomes invalid, and forgets it. The token is forgotten
+     * also when modwerkstatt.com cannot be reached, see [ModwerkstattLogoutResult.FORGOTTEN_LOCALLY].
+     */
+    suspend fun modwerkstattLogout(): ModwerkstattLogoutResult {
+        val login = withContext(Dispatchers.IO) { modwerkstattLogins.load() } ?: return ModwerkstattLogoutResult.NOT_SIGNED_IN
+        var result = ModwerkstattLogoutResult.SIGNED_OUT
+        if (!login.isExpired()) {
+            try {
+                modwerkstattClient().logout(login)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: ModwerkstattAuthException) {
+                // The token is no longer valid there, which is what signing out achieves
+                logger.info { "modwerkstatt.com no longer accepted the token when signing out: ${e.message}" }
+            } catch (e: Exception) {
+                logger.warn(e) { "Could not sign out on modwerkstatt.com, forgetting the token anyway" }
+                result = ModwerkstattLogoutResult.FORGOTTEN_LOCALLY
+            }
+        }
+        withContext(Dispatchers.IO) { forgetModwerkstattLogin() }
+        return result
+    }
+
+    private fun forgetModwerkstattLogin() {
+        modwerkstattLogins.clear()
+        feeds.clearCache(FeedSource.MODWERKSTATT)
+    }
+
+    private fun modwerkstattClient() = ModwerkstattClient(http, modwerkstattApiUrl)
+
+    internal fun feedHeaders(source: FeedSource): Map<String, String> =
+        if (source == FeedSource.MODWERKSTATT) modwerkstattHeaders(source.url) else emptyMap()
+
+    /** The session token for requests to [url], when signed in and [url] is on modwerkstatt.com. */
+    private fun modwerkstattHeaders(url: String): Map<String, String> {
+        if (!sendsModwerkstattToken(url)) return emptyMap()
+        return modwerkstattLogin()?.let { mapOf("Authorization" to "Bearer ${it.token}") }.orEmpty()
+    }
+
     /**
      * Subscriptions of the signed-in user compared with the mod.io folder; null when not signed in.
      * [installed] is the scanned mod.io folder, if the caller has it already.
@@ -140,7 +246,7 @@ class ModManager(
         return registry.records(modsDir).values.filter { it.folderName !in changed }.mapNotNull { record ->
             val origin = record.origin
             val remote = remoteByRef[origin.ref] ?: return@mapNotNull null
-            // modwerkstatt entries can hold several mod folders; match ours by name
+            // An entry can hold several mod folders; match ours by name
             val file = remote.files.firstOrNull { it.folderName == record.folderName } ?: remote.files.singleOrNull()
                 ?: return@mapNotNull null
             val newer = if (file.sha256 != null && record.archiveSha256 != null) {
@@ -190,6 +296,9 @@ class ModManager(
     }
 
     companion object {
+        /** How a modwerkstatt.com sign-in shows up in the account's list of devices. */
+        val DEVICE_NAME = "shunter (${System.getProperty("os.name")})"
+
         fun findRemote(feeds: List<FeedResult>, source: FeedSource, id: String): RemoteMod? =
             feeds.firstOrNull { it.source == source }?.mods?.firstOrNull { it.id == id }
     }

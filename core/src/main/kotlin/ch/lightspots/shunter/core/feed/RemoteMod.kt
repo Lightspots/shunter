@@ -10,7 +10,7 @@ enum class FeedSource(val id: String, val label: String, val url: String) {
     TFNET("tfnet", "transportfever.net", "https://www.transportfever.net/filebase/repos/tpf3-v3.json"),
 
     @SerialName("modwerkstatt")
-    MODWERKSTATT("modwerkstatt", "modwerkstatt.com", "https://modwerkstatt.com/tpfmm/"),
+    MODWERKSTATT("modwerkstatt", "modwerkstatt.com", "https://modwerkstatt.com/json/mwmanager"),
     ;
 
     companion object {

@@ -1,16 +1,20 @@
 package ch.lightspots.shunter.core.feed
 
 import ch.lightspots.shunter.core.net.HttpDownloader
+import ch.lightspots.shunter.core.net.HttpStatusException
 import ch.lightspots.shunter.core.paths.AppDirs
+import ch.lightspots.shunter.core.writePrivateFile
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.io.IOException
 import java.nio.file.Path
 import java.time.Clock
 import java.time.Duration
 import java.time.Instant
 import kotlin.io.path.createDirectories
+import kotlin.io.path.deleteIfExists
 import kotlin.io.path.exists
 import kotlin.io.path.getLastModifiedTime
 import kotlin.io.path.readText
@@ -18,14 +22,31 @@ import kotlin.io.path.writeText
 
 private val logger = KotlinLogging.logger {}
 
-/** Result of loading a feed. [error] is set when refreshing failed and an older copy was used instead. */
-data class FeedResult(val source: FeedSource, val mods: List<RemoteMod>, val fetchedAt: Instant, val error: String? = null)
+/**
+ * Result of loading a feed. [error] is set when refreshing failed and an older copy was used instead,
+ * [signInRefused] when it failed because the site no longer accepts the sign-in.
+ */
+data class FeedResult(
+    val source: FeedSource,
+    val mods: List<RemoteMod>,
+    val fetchedAt: Instant,
+    val error: String? = null,
+    val signInRefused: Boolean = false,
+)
+
+/** The site refused the sign-in sent with the feed request; signing in again helps. */
+class FeedSignInException(val source: FeedSource, val status: Int, cause: Throwable? = null) :
+    IOException("${source.label} no longer accepts the sign-in (HTTP $status)", cause)
 
 /** Downloads feeds and keeps the last copy in the cache, so they are not fetched on every command. */
 class FeedService(
     private val appDirs: AppDirs,
     private val http: HttpDownloader = HttpDownloader(),
     private val clock: Clock = Clock.systemUTC(),
+    /** Extra request headers for a feed, such as a sign-in. They are never logged. */
+    private val headers: (FeedSource) -> Map<String, String> = { emptyMap() },
+    /** Where each feed is fetched from; tests point it elsewhere. */
+    private val urls: (FeedSource) -> String = FeedSource::url,
 ) {
 
     suspend fun load(source: FeedSource, maxAge: Duration = Duration.ofHours(1)): FeedResult = withContext(Dispatchers.IO) {
@@ -36,11 +57,19 @@ class FeedService(
             return@withContext FeedResult(source, parse(source, cached.readText()), cachedAt)
         }
         try {
-            val text = http.fetchText(source.url)
+            // Read once: the same headers decide the request and how the copy is stored
+            val requestHeaders = headers(source)
+            val text = fetch(source, requestHeaders)
             // Parse before caching, so a broken response never replaces a good copy
             val mods = parse(source, text)
-            cached.parent.createDirectories()
-            cached.writeText(text)
+            if (headers(source) == requestHeaders) {
+                cached.parent.createDirectories()
+                // Fetched signed in, the list can hold signed download links, which are credentials until they expire
+                if (requestHeaders.isNotEmpty()) writePrivateFile(cached, text) else cached.writeText(text)
+            } else {
+                // Signed in or out meanwhile, which cleared the cache; the list belongs to the old state
+                logger.info { "Sign-in for ${source.label} changed while fetching, not caching the mod list" }
+            }
             logger.info { "Fetched ${source.label} mod list: ${mods.size} mods" }
             FeedResult(source, mods, clock.instant())
         } catch (e: CancellationException) {
@@ -48,8 +77,20 @@ class FeedService(
         } catch (e: Exception) {
             if (cachedAt == null) throw e
             logger.warn(e) { "Could not refresh ${source.label} mod list, using copy from $cachedAt" }
-            FeedResult(source, parse(source, cached.readText()), cachedAt, error = e.message ?: e.toString())
+            FeedResult(source, parse(source, cached.readText()), cachedAt, e.message ?: e.toString(), e is FeedSignInException)
         }
+    }
+
+    /** Forgets the cached copy, e.g. after signing in, when the site may list more. */
+    fun clearCache(source: FeedSource) {
+        if (cacheFile(source).deleteIfExists()) logger.debug { "Removed cached ${source.label} mod list" }
+    }
+
+    private suspend fun fetch(source: FeedSource, requestHeaders: Map<String, String>): String = try {
+        http.fetchText(urls(source), requestHeaders)
+    } catch (e: HttpStatusException) {
+        if (requestHeaders.isNotEmpty() && e.status in setOf(401, 403)) throw FeedSignInException(source, e.status, e)
+        throw e
     }
 
     suspend fun loadAll(maxAge: Duration = Duration.ofHours(1)): List<FeedResult> = FeedSource.entries.map { load(it, maxAge) }
