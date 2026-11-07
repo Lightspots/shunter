@@ -15,4 +15,4 @@ dependencyResolutionManagement {
     }
 }
 
-include(":core", ":cli", ":app")
+include(":core", ":logging", ":cli", ":app")

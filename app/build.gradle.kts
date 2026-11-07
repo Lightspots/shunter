@@ -8,11 +8,11 @@ plugins {
 
 dependencies {
     implementation(project(":core"))
+    implementation(project(":logging"))
     implementation(compose.desktop.currentOs)
     implementation(libs.compose.material3)
     implementation(libs.kotlinx.coroutines.swing)
     implementation(libs.kotlin.logging)
-    implementation(libs.logback.classic)
 
     testImplementation(platform(libs.junit.bom))
     testImplementation(libs.junit.jupiter)

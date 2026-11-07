@@ -105,7 +105,8 @@ Mods are downloaded from the internet and unpacked into your game folders, so Sh
 
 ## Development
 
-Kotlin/JVM 25+, Gradle. Modules: `core` (everything except the UI, no UI dependencies), `cli`, `app` (Compose Desktop).
+Kotlin/JVM 25+, Gradle. Modules: `core` (everything except the UI, no UI dependencies), `logging` (Logback setup of the
+frontends), `cli`, `app` (Compose Desktop).
 
 ```sh
 ./gradlew build

@@ -6,6 +6,7 @@ import ch.lightspots.shunter.core.net.HttpDownloader
 import ch.lightspots.shunter.core.paths.AppDirs
 import ch.lightspots.shunter.core.paths.GamePathDetector
 import ch.lightspots.shunter.core.readableMessage
+import ch.lightspots.shunter.logging.Logging
 import com.github.ajalt.clikt.core.CliktCommand
 import com.github.ajalt.clikt.core.Context
 import com.github.ajalt.clikt.core.main

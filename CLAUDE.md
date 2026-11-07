@@ -98,8 +98,8 @@ suffix. mod.io packages have only `mod.json` plus content at the top level (no `
   `Dispatchers.IO`. The CLI shares one `HttpDownloader` (closed via Clikt's `registerCloseable`)
   and runs commands in `runBlocking`.
 - Logging: `core` uses only the kotlin-logging facade (`private val logger = KotlinLogging.logger {}`).
-  Frontends bring Logback and log to a file only, never the console (CLI: `Logging.setup`, rotation by
-  size at startup via `LogRotation`). kotlin-logging prints a startup line on stdout unless
+  Frontends bring Logback (through the `logging` module) and log to a file only, never the console
+  (`Logging.setup`, rotation by size at startup via `LogRotation`). kotlin-logging prints a startup line on stdout unless
   `-Dkotlin-logging.logStartupMessage=false` is set, so keep that JVM argument. Never log secrets (the
   mod.io API key) and keep library loggers (Ktor) at INFO. `SHUNTER_LOG_LEVEL=debug` raises our own.
   URLs end up in logs and error messages, Ktor's timeout exceptions included, so secrets must not be

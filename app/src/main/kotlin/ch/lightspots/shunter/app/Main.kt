@@ -16,6 +16,7 @@ import ch.lightspots.shunter.core.ModManager
 import ch.lightspots.shunter.core.net.HttpDownloader
 import ch.lightspots.shunter.core.paths.AppDirs
 import ch.lightspots.shunter.core.paths.GamePathDetector
+import ch.lightspots.shunter.logging.Logging
 import io.github.oshai.kotlinlogging.KotlinLogging
 import java.awt.Dimension
 import java.util.Locale
