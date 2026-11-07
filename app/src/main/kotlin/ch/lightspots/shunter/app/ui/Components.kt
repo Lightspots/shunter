@@ -33,7 +33,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -60,13 +59,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import ch.lightspots.shunter.app.Operation
 import ch.lightspots.shunter.app.Phase
-import ch.lightspots.shunter.app.Previews
 import ch.lightspots.shunter.app.humanSize
 import ch.lightspots.shunter.app.initials
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.withContext
-import java.nio.file.Path
 
 val CardShape = RoundedCornerShape(12.dp)
 val ControlShape = RoundedCornerShape(8.dp)
@@ -321,34 +316,18 @@ fun ProgressBar(fraction: Float?, modifier: Modifier = Modifier) {
     }
 }
 
-/** The mod's preview image, or its initials on a colored square while there is none. */
+/** A mod's picture, or its initials on a colored box while there is none. */
 @Composable
-fun Thumbnail(name: String, preview: Path?, tone: Tone, size: Dp, modifier: Modifier = Modifier, maxWidth: Int = 96) {
-    val image by produceState(preview?.let { Previews.cached(it, maxWidth) }, preview, maxWidth) {
-        if (preview != null && value == null) value = withContext(Dispatchers.IO) { Previews.load(preview, maxWidth) }
-    }
+fun Thumbnail(name: String, image: ImageBitmap?, tone: Tone, width: Dp, height: Dp = width, modifier: Modifier = Modifier) {
     Box(
-        modifier.size(size).clip(RoundedCornerShape(if (size > 48.dp) 10.dp else 8.dp)).background(tone.bg),
+        modifier.size(width, height).clip(RoundedCornerShape(if (height > 48.dp) 10.dp else 8.dp)).background(tone.bg),
         contentAlignment = Alignment.Center,
     ) {
-        val bitmap: ImageBitmap? = image
-        if (bitmap != null) {
-            Image(bitmap, null, Modifier.size(size), contentScale = ContentScale.Crop)
+        if (image != null) {
+            Image(image, null, Modifier.size(width, height), contentScale = ContentScale.Crop)
         } else {
-            Text(
-                initials(name),
-                style = Type.small.copy(
-                    fontWeight = FontWeight.Bold,
-                    fontSize = if (size >
-                        48.dp
-                    ) {
-                        15.sp
-                    } else {
-                        13.sp
-                    },
-                ),
-                color = tone.fg,
-            )
+            val fontSize = if (height > 48.dp) 15.sp else 13.sp
+            Text(initials(name), style = Type.small.copy(fontWeight = FontWeight.Bold, fontSize = fontSize), color = tone.fg)
         }
     }
 }

@@ -41,6 +41,7 @@ object TfnetFeedParser {
             files = listOfNotNull(latest),
             dependencies = json["dependencies"].arr().map(::parseDependency),
             tags = json["tags"].arr().mapNotNull { it.str() },
+            imageUrl = (json["images"]["preview"].str() ?: json["images"]["large"].str())?.takeIf { it.isNotBlank() },
         )
     }
 
@@ -108,6 +109,7 @@ object ModwerkstattFeedParser {
                 RemoteDependency(name = depId?.let { titles[it] } ?: dep["modId"].str(), remoteId = depId, required = true)
             },
             tags = json["categories"].arr().mapNotNull { it["name"].str() },
+            imageUrl = json["image_url"].str()?.takeIf { it.isNotBlank() },
         )
     }
 }

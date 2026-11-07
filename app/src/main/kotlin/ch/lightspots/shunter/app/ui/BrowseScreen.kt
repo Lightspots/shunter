@@ -22,6 +22,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -169,6 +170,7 @@ private fun SortMenu(model: AppModel) {
 @Composable
 private fun ResultRow(
     name: String,
+    image: ImageBitmap?,
     tone: Tone,
     siteLabel: String,
     meta: String,
@@ -182,7 +184,7 @@ private fun ResultRow(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        Thumbnail(name, null, tone, 56.dp)
+        Thumbnail(name, image, tone, 96.dp, 54.dp)
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(name, Modifier.weight(1f, fill = false), style = Type.item, color = c.heading)
@@ -220,7 +222,17 @@ private fun FeedRow(model: AppModel, mod: RemoteMod) {
         val installed = dep.remoteId?.let { "${mod.source.id}:$it" in library.installedRefs } == true
         (dep.name ?: "?") + if (installed) " (installed)" else ""
     }
-    ResultRow(mod.name, mod.source.tone(), mod.source.label, meta, mod.tags.takeIf { it.isNotEmpty() }?.joinToString(), deps) {
+    ResultRow(
+        mod.name,
+        rememberRemoteImage(mod.imageUrl, model.manager.images, 192),
+        mod.source.tone(),
+        mod.source.label,
+        meta,
+        mod.tags.takeIf {
+            it.isNotEmpty()
+        }?.joinToString(),
+        deps,
+    ) {
         val op = model.operations[mod.ref]
         when {
             op != null -> OperationProgress(op)
@@ -258,7 +270,7 @@ private fun ModIoRow(model: AppModel, mod: ModIoMod) {
         mod.subscribers?.let { "$it subscribers" },
         humanSize(mod.fileSize),
     ).joinToString(" · ")
-    ResultRow(mod.name, colors.modIo, "mod.io", meta, mod.summary, null) {
+    ResultRow(mod.name, rememberRemoteImage(mod.logoUrl, model.manager.images, 192), colors.modIo, "mod.io", meta, mod.summary, null) {
         val op = model.operations["modio:${mod.id}"]
         val subscribed = model.library.modIo?.subscribed?.any { it.id == mod.id } == true
         when {

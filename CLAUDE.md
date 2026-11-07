@@ -49,10 +49,11 @@ suffix. mod.io packages have only `mod.json` plus content at the top level (no `
   About half the archives are `.7z`. `detected_mods` is always empty, so the mod folder is
   found by extracting. Version is in `custom_fields` with label "Aktuelle Version".
   Dependencies point to other entries (`entry_id`) and carry an `install` block.
+  `images.preview` is a thumbnail (PNG, ~140 KB), `images.large` the full picture.
 - modwerkstatt.com: `https://modwerkstatt.com/json/mwmanager`, the list the ModWerkstatt ModManager
   (a Godot app) reads. A JSON array: `id`, `modId`, `title`, `download_url` (`.zip`, mod folder at the
   top), `file_size`, `revision` (string, = `mod.json` revision), `updates` (`{"<rev>": text}`, `[]` when
-  empty), `required_mods` (`[{id, modId}]`). No checksum, author or dates. The old `/tpfmm/` lists only
+  empty), `required_mods` (`[{id, modId}]`), `image_url` (`.webp`; all of them answered 404 as of 2026-11). No checksum, author or dates. The old `/tpfmm/` lists only
   TPF2. Sign-in at `https://modwerkstatt.com/api`: `POST /login/request {email}` mails a code,
   `POST /login/confirm {email, code, device_name}` returns `{token, expires_at, user{name, membership_until}}`,
   then `Authorization: Bearer` (`GET /me`, `POST /logout`). With the token the feed also lists
@@ -86,6 +87,9 @@ suffix. mod.io packages have only `mod.json` plus content at the top level (no `
   when the output is not a terminal or `NO_COLOR` is set. Use the style helpers in `ManagerCommand`
   (`warning`, `success`, `muted`, `highlight`, `bold`) and `table()`, which pads by visible width.
   Downloads show a Mordant progress bar (`DownloadBar`, via `withDownloadBars`).
+- Preview pictures of the sites (`RemoteMod.imageUrl`, `ModIoMod.logoUrl`) go through `ImageCache` into
+  `~/.cache/shunter/images` (HTTPS only, max 5 MB, 4 at a time, pruned after 30 days); failures are not
+  retried until restart.
 - App (`app`): `AppModel` holds the state (Compose state, changed on the UI thread) and calls
   `ModManager`; installs run one at a time behind a mutex. What the Library and Updates screens show
   is derived in `LibraryData` (plain functions, unit tested). Colors are the design's tokens in

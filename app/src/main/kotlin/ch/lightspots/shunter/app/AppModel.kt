@@ -169,6 +169,7 @@ class AppModel(
             launch { loadFeeds(force = false) }
             launch { loadModIoSubscriptions() }
             launch { checkModwerkstattAccount() }
+            launch(Dispatchers.IO) { manager.images.prune() }
         }
     }
 

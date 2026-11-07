@@ -28,11 +28,11 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.produceState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.layout.ContentScale
@@ -46,14 +46,11 @@ import androidx.compose.ui.unit.sp
 import ch.lightspots.shunter.app.AppModel
 import ch.lightspots.shunter.app.Launcher
 import ch.lightspots.shunter.app.LibraryData
-import ch.lightspots.shunter.app.Previews
 import ch.lightspots.shunter.app.Screen
 import ch.lightspots.shunter.app.initials
 import ch.lightspots.shunter.app.revisionText
 import ch.lightspots.shunter.core.mod.InstalledMod
 import ch.lightspots.shunter.core.mod.ModLocation
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import java.awt.Frame
 
 private val LOCATION_ORDER = listOf(ModLocation.LOCAL, ModLocation.MOD_IO, ModLocation.STAGING)
@@ -211,7 +208,7 @@ private fun ModRow(model: AppModel, library: LibraryData, mod: InstalledMod, isS
                 .pointerHoverIcon(PointerIcon.Hand)
                 .semantics { selected = isSelected },
         ) {
-            Thumbnail(name, mod.previewImage, status.kind.tone(), 40.dp)
+            Thumbnail(name, rememberModImage(model, library, mod, 96), status.kind.tone(), 40.dp)
             Column(Modifier.weight(1f)) {
                 Text(
                     name,
@@ -242,7 +239,7 @@ private fun ModDetails(model: AppModel, library: LibraryData, mod: InstalledMod,
 
     Panel(modifier, padding = PaddingValues(20.dp)) {
         Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            LargePreview(name, mod, status.kind.tone())
+            LargePreview(name, rememberModImage(model, library, mod, 640), status.kind.tone())
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.Center) {
                     Badge(mod.location.label, mod.location.tone())
@@ -313,17 +310,13 @@ private fun ModDetails(model: AppModel, library: LibraryData, mod: InstalledMod,
 }
 
 @Composable
-private fun LargePreview(name: String, mod: InstalledMod, tone: Tone) {
-    val image by produceState(Previews.cached(mod.previewImage, 640), mod.previewImage) {
-        if (value == null) value = withContext(Dispatchers.IO) { Previews.load(mod.previewImage, 640) }
-    }
+private fun LargePreview(name: String, image: ImageBitmap?, tone: Tone) {
     Box(
         Modifier.fillMaxWidth().aspectRatio(16f / 9f).clip(RoundedCornerShape(8.dp)).background(tone.bg),
         contentAlignment = Alignment.Center,
     ) {
-        val bitmap = image
-        if (bitmap != null) {
-            Image(bitmap, "Preview of $name", Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+        if (image != null) {
+            Image(image, "Preview of $name", Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
         } else {
             Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(initials(name), style = Type.title.copy(fontSize = 32.sp), color = tone.fg)
@@ -331,6 +324,15 @@ private fun LargePreview(name: String, mod: InstalledMod, tone: Tone) {
             }
         }
     }
+}
+
+/** The mod's `_metadata/0.png`; mod.io packages have none, for them the logo on mod.io. */
+@Composable
+private fun rememberModImage(model: AppModel, library: LibraryData, mod: InstalledMod, maxWidth: Int): ImageBitmap? {
+    val logo = if (mod.location == ModLocation.MOD_IO && mod.metadata == null) library.modIo?.subscriptionOf(mod)?.logoUrl else null
+    val local = rememberLocalImage(if (logo == null) mod.previewImage else null, maxWidth)
+    val remote = rememberRemoteImage(logo, model.manager.images, maxWidth)
+    return local ?: remote
 }
 
 @Composable

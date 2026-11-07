@@ -26,6 +26,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
+import java.io.ByteArrayOutputStream
 import java.io.IOException
 import java.net.URLDecoder
 import java.nio.file.Path
@@ -130,6 +131,38 @@ class HttpDownloader(private val client: HttpClient = defaultClient()) : AutoClo
         val text = response.bodyAsText(Charsets.UTF_8)
         if (!response.status.isSuccess()) throw HttpStatusException(response.status.value, url, text.take(MAX_ERROR_BODY))
         return HttpText(response.status.value, text)
+    }
+
+    /**
+     * Fetches a small file, such as a picture, into memory. Fails with [DownloadException] when it is larger than
+     * [maxBytes] or a web page. Logged at debug level only: pages of the frontends load many of them.
+     */
+    suspend fun fetchBytes(url: String, maxBytes: Long): ByteArray = withContext(Dispatchers.IO) {
+        val shown = redactUrl(url)
+        logger.debug { "GET $shown" }
+        try {
+            client.prepareGet(url).execute { response ->
+                checkStatus(url, response)
+                if (response.contentType()?.match(ContentType.Text.Html) == true) throw DownloadException("$shown sent a web page")
+                response.contentLength()?.let { if (it > maxBytes) throw DownloadException("$shown is larger than $maxBytes bytes") }
+                val body = response.bodyAsChannel()
+                val out = ByteArrayOutputStream()
+                val buffer = ByteArray(64 * 1024)
+                while (true) {
+                    currentCoroutineContext().ensureActive()
+                    val read = body.readAvailable(buffer)
+                    if (read < 0) break
+                    out.write(buffer, 0, read)
+                    if (out.size() > maxBytes) throw DownloadException("$shown is larger than $maxBytes bytes")
+                }
+                out.toByteArray()
+            }
+        } catch (e: IOException) {
+            val message = e.message.orEmpty()
+            val redacted = redactUrls(message.replace(url, shown))
+            if (e is DownloadException || redacted == message) throw e
+            throw DownloadException(redacted).apply { stackTrace = e.stackTrace }
+        }
     }
 
     /**

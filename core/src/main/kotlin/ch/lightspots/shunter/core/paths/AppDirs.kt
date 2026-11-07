@@ -24,6 +24,9 @@ data class AppDirs(val data: Path, val cache: Path, val config: Path, val state:
     val downloads: Path get() = cache.resolve("downloads")
     val feeds: Path get() = cache.resolve("feeds")
 
+    /** Preview pictures of mods on the sites, see [ch.lightspots.shunter.core.net.ImageCache]. */
+    val images: Path get() = cache.resolve("images")
+
     /** Scratch space for extracting archives. Kept under [data] so it is likely on the same disk as the game. */
     val work: Path get() = data.resolve("work")
 
