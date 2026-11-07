@@ -6,9 +6,8 @@ See README.md for usage.
 
 ## Status and next steps
 
-- Done: `core` (scan, feeds, download, install/update/remove with backups) and `cli`.
-- Next: Compose Desktop app (`app` module) on top of `core`. Compose plugin 1.12.1 and Kotlin
-  2.4.20 are in the version catalog already; material3's latest stable is 1.9.0.
+- Done: `core` (scan, feeds, download, install/update/remove with backups), `cli`, and the Compose
+  Desktop `app` (#16; screens Library, Browse, Updates, Settings, light and dark, as in the design).
 - Open points:
   - transportfever.net also lists tools (e.g. both Windows mod managers) in category
     "Werkzeuge & Tools" / `mod_type: script`. Installing one downloads it, then fails with
@@ -32,7 +31,7 @@ See README.md for usage.
 | mod.io | `~/mod.io/common/10640/mods` | read only, managed by the in-game Mod Hub; folder name = mod.io id |
 
 Our own state follows XDG: `~/.local/share/shunter` (install records, backups, work dir),
-`~/.cache/shunter` (downloads, feeds), `~/.local/state/shunter/logs` (one log per frontend, `cli.log`).
+`~/.cache/shunter` (downloads, feeds), `~/.local/state/shunter/logs` (one log per frontend, `cli.log`, `app.log`).
 Nothing of ours goes into the game folders.
 
 ## TF3 mod format
@@ -87,6 +86,12 @@ suffix. mod.io packages have only `mod.json` plus content at the top level (no `
   when the output is not a terminal or `NO_COLOR` is set. Use the style helpers in `ManagerCommand`
   (`warning`, `success`, `muted`, `highlight`, `bold`) and `table()`, which pads by visible width.
   Downloads show a Mordant progress bar (`DownloadBar`, via `withDownloadBars`).
+- App (`app`): `AppModel` holds the state (Compose state, changed on the UI thread) and calls
+  `ModManager`; installs run one at a time behind a mutex. What the Library and Updates screens show
+  is derived in `LibraryData` (plain functions, unit tested). Colors are the design's tokens in
+  `ui/Theme.kt` (`colors.*`), icons the design's SVG paths in `ui/Icons.kt`. Composables are
+  PascalCase (`ktlint_function_naming_ignore_when_annotated_with = Composable`). material3 is
+  versioned apart from Compose (`compose-material3` in the catalog).
 - `BuildInfo` is generated from the Gradle project version (`generateBuildInfo` in `core`); do not
   add it to `src`.
 - Network calls in `core` are `suspend` and cancellable; suspend functions move blocking work to
