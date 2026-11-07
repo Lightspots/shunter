@@ -61,7 +61,10 @@ class ModwerkstattLogoutCommand : ManagerCommand("logout") {
             ModwerkstattLogoutResult.SIGNED_OUT -> echo(success("Signed out of modwerkstatt.com."))
 
             ModwerkstattLogoutResult.FORGOTTEN_LOCALLY -> {
-                echo("${warning("Warning:")} modwerkstatt.com could not be reached, so the session may stay valid there.", err = true)
+                echo(
+                    "${warning("Warning:")} modwerkstatt.com did not confirm the sign-out, so the session may stay valid there.",
+                    err = true,
+                )
                 echo("The sign-in is forgotten here. Sign out on modwerkstatt.com to end the session.")
             }
         }
