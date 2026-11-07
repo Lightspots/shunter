@@ -1,5 +1,10 @@
 # Path -> label rules for .github/workflows/label.yml (actions/labeler).
 
+"area:app":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "app/**"
+
 "area:cli":
   - changed-files:
       - any-glob-to-any-file:
@@ -20,3 +25,8 @@
           - "gradlew.bat"
           - "gradle.properties"
           - ".github/**"
+
+"area:logging":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "logging/**"
