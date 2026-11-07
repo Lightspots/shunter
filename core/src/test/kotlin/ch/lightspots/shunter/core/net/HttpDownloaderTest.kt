@@ -150,6 +150,22 @@ class HttpDownloaderTest {
         assertEquals("https://a.example/f.zip", redactUrl("https://a.example/f.zip"))
         assertEquals("https://a.example/f.zip?exp=17&sig=***", redactUrl("https://a.example/f.zip?exp=17&sig=abc"))
         assertEquals("https://a.example/?q=x&API_KEY=***&flag#top", redactUrl("https://a.example/?q=x&API_KEY=k&flag#top"))
+        // Percent-encoded names are compared decoded: %73 is "s"
+        assertEquals("https://a.example/f.zip?exp=17&%73ig=***", redactUrl("https://a.example/f.zip?exp=17&%73ig=abc"))
+    }
+
+    @Test
+    fun `redacts credentials in urls inside messages, however the url is spelled`() {
+        assertEquals(
+            // The value runs to the next space: hiding a trailing comma too is better than showing part of a signature
+            "Request timeout has expired [url=https://a.example/f.zip?exp=17&sig=*** request_timeout=unknown ms]",
+            redactUrls("Request timeout has expired [url=https://a.example/f.zip?exp=17&sig=abc, request_timeout=unknown ms]"),
+        )
+        assertEquals(
+            "HTTPS://A.example/f.zip?Sig=*** and http://b.example/?q=x",
+            redactUrls("HTTPS://A.example/f.zip?Sig=abc and http://b.example/?q=x"),
+        )
+        assertEquals("no url here", redactUrls("no url here"))
     }
 
     @Test

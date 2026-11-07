@@ -11,14 +11,16 @@ import kotlin.io.path.writeText
 
 /**
  * Writes [text] to a file only the user can read (mode 600), for credentials. The text goes to a
- * temporary file that has these permissions from the start, which then replaces [file].
+ * temporary file of its own that has these permissions from the start, which then replaces [file].
+ * The temporary file has a unique name, so processes writing [file] at the same time never share one.
  */
 internal fun writePrivateFile(file: Path, text: String) {
-    file.parent.createDirectories()
-    val temp = file.resolveSibling("${file.fileName}.tmp")
-    temp.deleteIfExists()
-    if (file.fileSystem.supportedFileAttributeViews().contains("posix")) {
-        Files.createFile(temp, PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rw-------")))
+    val dir = file.toAbsolutePath().parent.createDirectories()
+    val prefix = "${file.fileName}."
+    val temp = if (dir.fileSystem.supportedFileAttributeViews().contains("posix")) {
+        Files.createTempFile(dir, prefix, ".tmp", PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rw-------")))
+    } else {
+        Files.createTempFile(dir, prefix, ".tmp")
     }
     try {
         temp.writeText(text)

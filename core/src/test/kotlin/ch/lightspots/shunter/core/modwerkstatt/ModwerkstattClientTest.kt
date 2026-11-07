@@ -1,6 +1,7 @@
 package ch.lightspots.shunter.core.modwerkstatt
 
 import ch.lightspots.shunter.core.ModManager
+import ch.lightspots.shunter.core.ModwerkstattLogoutResult
 import ch.lightspots.shunter.core.TestFiles
 import ch.lightspots.shunter.core.feed.FeedService
 import ch.lightspots.shunter.core.feed.FeedSignInException
@@ -87,10 +88,12 @@ class ModwerkstattClientTest {
                         respond(exchange, 401, """{"error": "token_invalid"}""")
                     }
 
-                "/api/logout" -> {
-                    validTokens.remove(token)
-                    respond(exchange, 200, "{}")
-                }
+                "/api/logout" ->
+                    if (validTokens.remove(token)) {
+                        respond(exchange, 200, "{}")
+                    } else {
+                        respond(exchange, 401, """{"error": "token_invalid"}""")
+                    }
 
                 "/json/mwmanager" ->
                     if (token == null || token in validTokens) {
@@ -185,10 +188,10 @@ class ModwerkstattClientTest {
     @Test
     fun `logout ends the session on the server and forgets the token, also when the server cannot be reached`() = runBlocking {
         val manager = manager()
-        assertFalse(manager.modwerkstattLogout())
+        assertEquals(ModwerkstattLogoutResult.NOT_SIGNED_IN, manager.modwerkstattLogout())
 
         signedIn(manager)
-        assertTrue(manager.modwerkstattLogout())
+        assertEquals(ModwerkstattLogoutResult.SIGNED_OUT, manager.modwerkstattLogout())
         assertEquals(Request("POST", "/api/logout", "Bearer $TOKEN", "application/json", "{}"), requests.single())
         assertFalse(TOKEN in validTokens)
         assertNull(manager.modwerkstattLogins.load())
@@ -196,8 +199,45 @@ class ModwerkstattClientTest {
         // Port 1 is never open
         val offline = manager(apiUrl = "http://127.0.0.1:1/api")
         signedIn(offline)
-        assertTrue(offline.modwerkstattLogout())
+        assertEquals(ModwerkstattLogoutResult.FORGOTTEN_LOCALLY, offline.modwerkstattLogout())
         assertNull(offline.modwerkstattLogins.load())
+    }
+
+    @Test
+    fun `logout with a token the server no longer accepts counts as signed out`() = runBlocking {
+        val manager = manager()
+        signedIn(manager)
+        validTokens.clear()
+
+        assertEquals(ModwerkstattLogoutResult.SIGNED_OUT, manager.modwerkstattLogout())
+        assertEquals("/api/logout", requests.single().path)
+        assertNull(manager.modwerkstattLogins.load())
+    }
+
+    @Test
+    fun `a feed fetched while the sign-in changed is not cached`() = runBlocking<Unit> {
+        val appDirs = AppDirs.under(tmp.resolve("app"))
+        // Signed in for the request, signed out (cache cleared) before the answer is stored
+        val answers = ArrayDeque(listOf(mapOf("Authorization" to "Bearer $TOKEN"), emptyMap()))
+        val feeds =
+            FeedService(appDirs, http, headers = { answers.removeFirstOrNull() ?: emptyMap() }, urls = { "$baseUrl/json/mwmanager" })
+
+        val result = feeds.load(FeedSource.MODWERKSTATT)
+
+        assertEquals(1, result.mods.size)
+        assertEquals("Bearer $TOKEN", requests.single().authorization)
+        assertFalse(appDirs.feeds.resolve("modwerkstatt.json").exists())
+    }
+
+    @Test
+    fun `a feed fetched signed in is cached readable only by the user`() = runBlocking<Unit> {
+        val appDirs = AppDirs.under(tmp.resolve("app"))
+        val feeds =
+            FeedService(appDirs, http, headers = { mapOf("Authorization" to "Bearer $TOKEN") }, urls = { "$baseUrl/json/mwmanager" })
+
+        feeds.load(FeedSource.MODWERKSTATT)
+
+        assertEquals(PosixFilePermissions.fromString("rw-------"), appDirs.feeds.resolve("modwerkstatt.json").getPosixFilePermissions())
     }
 
     @Test

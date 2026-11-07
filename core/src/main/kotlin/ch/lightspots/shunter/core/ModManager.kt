@@ -58,6 +58,20 @@ data class MissingDependency(
     val wrongRevision: Int? = null,
 )
 
+/** Outcome of [ModManager.modwerkstattLogout]. */
+enum class ModwerkstattLogoutResult {
+    NOT_SIGNED_IN,
+
+    /** modwerkstatt.com ended the session (or it had expired), and the token is forgotten. */
+    SIGNED_OUT,
+
+    /**
+     * The token is forgotten, but modwerkstatt.com could not be told, so the session may stay valid there
+     * until it expires. Signing out on the website ends it.
+     */
+    FORGOTTEN_LOCALLY,
+}
+
 /**
  * Entry point for frontends (CLI, UI): everything they need, without knowing the parts.
  * Suspend functions move their blocking work to [Dispatchers.IO]; the others block the caller.
@@ -163,7 +177,7 @@ class ModManager(
      * modwerkstatt.com no longer accepts is forgotten and [ModwerkstattAuthException] thrown.
      */
     suspend fun modwerkstattAccount(): ModwerkstattLogin? {
-        val stored = modwerkstattLogins.load() ?: return null
+        val stored = withContext(Dispatchers.IO) { modwerkstattLogins.load() } ?: return null
         val current = try {
             if (stored.isExpired()) throw ModwerkstattAuthException("The modwerkstatt.com sign-in has expired.")
             modwerkstattClient().me(stored)
@@ -177,21 +191,26 @@ class ModManager(
 
     /**
      * Signs out on modwerkstatt.com, so the token becomes invalid, and forgets it. The token is forgotten
-     * also when modwerkstatt.com cannot be reached. Returns false when not signed in.
+     * also when modwerkstatt.com cannot be reached, see [ModwerkstattLogoutResult.FORGOTTEN_LOCALLY].
      */
-    suspend fun modwerkstattLogout(): Boolean {
-        val login = modwerkstattLogins.load() ?: return false
+    suspend fun modwerkstattLogout(): ModwerkstattLogoutResult {
+        val login = withContext(Dispatchers.IO) { modwerkstattLogins.load() } ?: return ModwerkstattLogoutResult.NOT_SIGNED_IN
+        var result = ModwerkstattLogoutResult.SIGNED_OUT
         if (!login.isExpired()) {
             try {
                 modwerkstattClient().logout(login)
             } catch (e: CancellationException) {
                 throw e
+            } catch (e: ModwerkstattAuthException) {
+                // The token is no longer valid there, which is what signing out achieves
+                logger.info { "modwerkstatt.com no longer accepted the token when signing out: ${e.message}" }
             } catch (e: Exception) {
                 logger.warn(e) { "Could not sign out on modwerkstatt.com, forgetting the token anyway" }
+                result = ModwerkstattLogoutResult.FORGOTTEN_LOCALLY
             }
         }
         withContext(Dispatchers.IO) { forgetModwerkstattLogin() }
-        return true
+        return result
     }
 
     private fun forgetModwerkstattLogin() {

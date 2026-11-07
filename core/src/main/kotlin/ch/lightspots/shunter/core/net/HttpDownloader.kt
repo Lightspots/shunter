@@ -27,6 +27,7 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import java.io.IOException
+import java.net.URLDecoder
 import java.nio.file.Path
 import java.nio.file.StandardCopyOption
 import java.security.MessageDigest
@@ -54,9 +55,28 @@ fun redactUrl(url: String): String {
     val end = url.indexOf('#', start).takeIf { it >= 0 } ?: url.length
     val query = url.substring(start + 1, end).split('&').joinToString("&") { param ->
         val name = param.substringBefore('=')
-        if ('=' in param && name.lowercase() in SECRET_PARAMS) "$name=***" else param
+        if ('=' in param && isSecretParam(name)) "$name=***" else param
     }
     return url.substring(0, start + 1) + query + url.substring(end)
+}
+
+/** Query parameters in free text, such as a URL inside an exception message, however the URL around them is spelled. */
+private val QUERY_PARAM = Regex("""([?&])([^=&#?\s]+)=([^&#\s]*)""")
+
+/**
+ * [text] with the values of credential query parameters replaced by `***` wherever a URL appears in it.
+ * For messages of other libraries, which may spell the URL differently than it was requested (Ktor
+ * lowercases the scheme, for example), so replacing the exact URL is not enough.
+ */
+fun redactUrls(text: String): String = QUERY_PARAM.replace(text) { match ->
+    val (separator, name, _) = match.destructured
+    if (isSecretParam(name)) "$separator$name=***" else match.value
+}
+
+/** Compares the decoded name, so `%73ig` counts as `sig`. */
+private fun isSecretParam(name: String): Boolean {
+    val decoded = runCatching { URLDecoder.decode(name, Charsets.UTF_8) }.getOrDefault(name)
+    return decoded.lowercase() in SECRET_PARAMS
 }
 
 /** The server answered with an error status. [body] holds the start of the response, which APIs use to explain the error. */
@@ -171,8 +191,10 @@ class HttpDownloader(private val client: HttpClient = defaultClient()) : AutoClo
             }
         } catch (e: IOException) {
             // Ktor's exceptions, timeouts among them, name the URL with its credentials
-            if (e is DownloadException || url == shown || url !in e.message.orEmpty()) throw e
-            throw DownloadException(e.message.orEmpty().replace(url, shown)).apply { stackTrace = e.stackTrace }
+            val message = e.message.orEmpty()
+            val redacted = redactUrls(message.replace(url, shown))
+            if (e is DownloadException || redacted == message) throw e
+            throw DownloadException(redacted).apply { stackTrace = e.stackTrace }
         } finally {
             part.deleteIfExists()
         }

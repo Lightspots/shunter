@@ -57,13 +57,19 @@ class FeedService(
             return@withContext FeedResult(source, parse(source, cached.readText()), cachedAt)
         }
         try {
-            val signedIn = headers(source).isNotEmpty()
-            val text = fetch(source)
+            // Read once: the same headers decide the request and how the copy is stored
+            val requestHeaders = headers(source)
+            val text = fetch(source, requestHeaders)
             // Parse before caching, so a broken response never replaces a good copy
             val mods = parse(source, text)
-            cached.parent.createDirectories()
-            // Fetched signed in, the list can hold signed download links, which are credentials until they expire
-            if (signedIn) writePrivateFile(cached, text) else cached.writeText(text)
+            if (headers(source) == requestHeaders) {
+                cached.parent.createDirectories()
+                // Fetched signed in, the list can hold signed download links, which are credentials until they expire
+                if (requestHeaders.isNotEmpty()) writePrivateFile(cached, text) else cached.writeText(text)
+            } else {
+                // Signed in or out meanwhile, which cleared the cache; the list belongs to the old state
+                logger.info { "Sign-in for ${source.label} changed while fetching, not caching the mod list" }
+            }
             logger.info { "Fetched ${source.label} mod list: ${mods.size} mods" }
             FeedResult(source, mods, clock.instant())
         } catch (e: CancellationException) {
@@ -80,14 +86,11 @@ class FeedService(
         if (cacheFile(source).deleteIfExists()) logger.debug { "Removed cached ${source.label} mod list" }
     }
 
-    private suspend fun fetch(source: FeedSource): String {
-        val requestHeaders = headers(source)
-        return try {
-            http.fetchText(urls(source), requestHeaders)
-        } catch (e: HttpStatusException) {
-            if (requestHeaders.isNotEmpty() && e.status in setOf(401, 403)) throw FeedSignInException(source, e.status, e)
-            throw e
-        }
+    private suspend fun fetch(source: FeedSource, requestHeaders: Map<String, String>): String = try {
+        http.fetchText(urls(source), requestHeaders)
+    } catch (e: HttpStatusException) {
+        if (requestHeaders.isNotEmpty() && e.status in setOf(401, 403)) throw FeedSignInException(source, e.status, e)
+        throw e
     }
 
     suspend fun loadAll(maxAge: Duration = Duration.ofHours(1)): List<FeedResult> = FeedSource.entries.map { load(it, maxAge) }

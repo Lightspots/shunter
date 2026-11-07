@@ -1,5 +1,6 @@
 package ch.lightspots.shunter.cli
 
+import ch.lightspots.shunter.core.ModwerkstattLogoutResult
 import ch.lightspots.shunter.core.modwerkstatt.ModwerkstattAuthException
 import ch.lightspots.shunter.core.modwerkstatt.ModwerkstattLogin
 import com.github.ajalt.clikt.core.CliktCommand
@@ -54,11 +55,16 @@ class ModwerkstattLogoutCommand : ManagerCommand("logout") {
     override fun help(context: Context) = "Sign out of modwerkstatt.com and forget the stored sign-in."
 
     override suspend fun execute() {
-        if (!manager.modwerkstattLogout()) {
-            echo("Not signed in to modwerkstatt.com.")
-            return
+        when (manager.modwerkstattLogout()) {
+            ModwerkstattLogoutResult.NOT_SIGNED_IN -> echo("Not signed in to modwerkstatt.com.")
+
+            ModwerkstattLogoutResult.SIGNED_OUT -> echo(success("Signed out of modwerkstatt.com."))
+
+            ModwerkstattLogoutResult.FORGOTTEN_LOCALLY -> {
+                echo("${warning("Warning:")} modwerkstatt.com could not be reached, so the session may stay valid there.", err = true)
+                echo("The sign-in is forgotten here. Sign out on modwerkstatt.com to end the session.")
+            }
         }
-        echo(success("Signed out of modwerkstatt.com."))
     }
 }
 
