@@ -159,6 +159,7 @@ class ModIoClientTest {
                 listOf(
                     "Bridge",
                 ),
+                "https://example.invalid/thumb.png",
             ),
             mod,
         )
@@ -291,7 +292,8 @@ class ModIoClientTest {
           "modfile": {"id": 9, "mod_id": $id, "filesize": 2048, "filehash": {"md5": "abc"}, "version": " 1.2 ",
                       "download": {"binary_url": "https://example.invalid/file.zip", "date_expires": 1}},
           "stats": {"mod_id": $id, "downloads_total": 10, "subscribers_total": 5},
-          "tags": [{"name": "Bridge", "name_localized": "Brücke"}]
+          "tags": [{"name": "Bridge", "name_localized": "Brücke"}],
+          "logo": {"filename": "logo.png", "original": "https://example.invalid/logo.png", "thumb_320x180": "https://example.invalid/thumb.png"}
         }
     """.trimIndent()
 

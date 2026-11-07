@@ -6,9 +6,21 @@ It installs and updates mods from [transportfever.net](https://www.transportfeve
 [modwerkstatt.com](https://modwerkstatt.com), and shows mods from the in-game Mod Hub (mod.io)
 and your own staging area next to them.
 
-> Status: early. There is a command-line tool; a desktop UI (Compose) comes next.
+> Status: early. There is a command-line tool and a desktop app.
 
-## Usage
+## Desktop app
+
+```sh
+./gradlew :app:run                                  # start it from the source tree
+./gradlew :app:run --args="--mods-dir /some/folder" # try things out without touching the game
+./gradlew :app:packageAppImage                      # or packageDeb / packageRpm
+```
+
+Library (installed mods and their state), Browse (search and install from the sites, subscribe on
+mod.io), Updates (updates and problems such as missing dependencies) and Settings (sign-ins, folders,
+light or dark theme). It logs to `~/.local/state/shunter/logs/app.log`.
+
+## Command line
 
 ```sh
 ./gradlew :cli:installDist
@@ -93,7 +105,8 @@ Mods are downloaded from the internet and unpacked into your game folders, so Sh
 
 ## Development
 
-Kotlin/JVM 25+, Gradle. Modules: `core` (everything except the UI, no UI dependencies), `cli`.
+Kotlin/JVM 25+, Gradle. Modules: `core` (everything except the UI, no UI dependencies), `logging` (Logback setup of the
+frontends), `cli`, `app` (Compose Desktop).
 
 ```sh
 ./gradlew build

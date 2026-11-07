@@ -54,6 +54,8 @@ data class RemoteMod(
     val files: List<RemoteFile> = emptyList(),
     val dependencies: List<RemoteDependency> = emptyList(),
     val tags: List<String> = emptyList(),
+    /** A preview picture on the site. */
+    val imageUrl: String? = null,
 ) {
     /** `tfnet:8126` style reference used by the CLI. */
     val ref: String get() = "${source.id}:$id"

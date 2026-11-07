@@ -23,6 +23,8 @@ data class ModIoMod(
     val fileSize: Long? = null,
     val subscribers: Long? = null,
     val tags: List<String> = emptyList(),
+    /** The mod's logo, 320×180. */
+    val logoUrl: String? = null,
 ) {
     val folderName: String get() = id.toString()
 }
@@ -60,6 +62,7 @@ internal object ModIoParser {
             fileSize = file["filesize"].long(),
             subscribers = json["stats"]["subscribers_total"].long(),
             tags = json["tags"].arr().mapNotNull { it["name"].str() },
+            logoUrl = (json["logo"]["thumb_320x180"].str() ?: json["logo"]["original"].str())?.takeIf { it.isNotBlank() },
         )
     }
 

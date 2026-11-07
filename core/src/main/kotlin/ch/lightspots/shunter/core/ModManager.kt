@@ -25,6 +25,7 @@ import ch.lightspots.shunter.core.modwerkstatt.ModwerkstattLogin
 import ch.lightspots.shunter.core.modwerkstatt.ModwerkstattLoginStore
 import ch.lightspots.shunter.core.net.DownloadProgress
 import ch.lightspots.shunter.core.net.HttpDownloader
+import ch.lightspots.shunter.core.net.ImageCache
 import ch.lightspots.shunter.core.paths.AppDirs
 import ch.lightspots.shunter.core.paths.GamePaths
 import io.github.oshai.kotlinlogging.KotlinLogging
@@ -92,6 +93,9 @@ class ModManager(
 
     /** The mod lists of the sites, with the modwerkstatt.com sign-in when there is one. */
     val feeds: FeedService by lazy { FeedService(appDirs, http, headers = ::feedHeaders) }
+
+    /** Preview pictures of mods on the sites, for the frontends. */
+    val images: ImageCache by lazy { ImageCache(appDirs.images, http) }
 
     init {
         logger.info {

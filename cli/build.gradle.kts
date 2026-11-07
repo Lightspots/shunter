@@ -5,9 +5,9 @@ plugins {
 
 dependencies {
     implementation(project(":core"))
+    implementation(project(":logging"))
     implementation(libs.clikt)
     implementation(libs.kotlin.logging)
-    implementation(libs.logback.classic)
 }
 
 application {

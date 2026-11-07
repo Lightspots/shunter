@@ -1,4 +1,4 @@
-package ch.lightspots.shunter.cli
+package ch.lightspots.shunter.logging
 
 import ch.lightspots.shunter.core.logging.LogRotation
 import ch.lightspots.shunter.core.paths.AppDirs
@@ -14,8 +14,8 @@ import java.nio.file.Path
 import kotlin.io.path.createDirectories
 
 /**
- * Logback setup: everything goes to `<name>.log` in [AppDirs.logs], nothing to the console, so
- * command output stays as it is. `SHUNTER_LOG_LEVEL=debug` logs more of shunter's own steps.
+ * Logback setup for the frontends: everything goes to `<name>.log` in [AppDirs.logs], nothing to the console, so
+ * CLI output stays as it is. `SHUNTER_LOG_LEVEL=debug` logs more of shunter's own steps.
  */
 object Logging {
     const val LEVEL_VARIABLE = "SHUNTER_LOG_LEVEL"

@@ -20,6 +20,7 @@ class FeedParsersTest {
                     "entry_url": "https://www.transportfever.net/filebase/entry/8097/",
                     "updated": 1791129919,
                     "tags": [ "Flugzeug" ],
+                    "images": { "preview": "https://www.transportfever.net/filebase/images/preview/1/thumb-a.png", "large": "https://www.transportfever.net/filebase/images/preview/1/upload-a.png" },
                     "custom_fields": {
                         "option8": { "id": 8, "label": "Aktuelle Version", "value": "1.2" },
                         "option9": { "id": 9, "label": "Status", "value": "Stable" }
@@ -66,6 +67,7 @@ class FeedParsersTest {
         assertEquals("DH-106", mod.author)
         assertEquals("1.2", mod.version)
         assertEquals(listOf("Flugzeug"), mod.tags)
+        assertEquals("https://www.transportfever.net/filebase/images/preview/1/thumb-a.png", mod.imageUrl)
         val file = mod.files.single()
         assertEquals("16920", file.id)
         assertEquals(169644322, file.size)
@@ -111,6 +113,8 @@ class FeedParsersTest {
         assertEquals("ICE 4", ice.name)
         assertEquals("rev 2", ice.version)
         assertEquals(listOf("Trains"), ice.tags)
+        assertEquals("https://modwerkstatt.com/img/models/tpf3/ice-4/preview.webp", ice.imageUrl)
+        assertNull(mods[1].imageUrl)
         val file = ice.files.single()
         assertEquals("9001-r2", file.id)
         assertEquals("mw_ice_4.zip", file.fileName)
